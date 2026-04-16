@@ -18,7 +18,7 @@ type Chat = {
 
 type Props = {
   user: string;
-  onOpenChat: (chatId: string, chatName: string) => void;
+  onOpenChat: (chatId: string, chatName: string, isGroup: boolean) => void;
   onOpenDrawer: () => void;
 };
 
@@ -122,7 +122,7 @@ export default function ChatListScreen({ user, onOpenChat, onOpenDrawer }: Props
         data={chats}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <TouchableOpacity style={styles.chatItem} onPress={() => onOpenChat(item.id, item.name)}>
+          <TouchableOpacity style={styles.chatItem} onPress={() => onOpenChat(item.id, item.name, item.isGroup || item.isGeneral)}>
             <View style={[styles.avatar, { backgroundColor: getAvatarBg(item) }]}>
               <Text style={styles.avatarText}>{getAvatar(item)}</Text>
             </View>

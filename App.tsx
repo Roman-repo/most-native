@@ -11,7 +11,7 @@ import DrawerContent from './src/screens/DrawerContent';
 import { theme } from './src/styles/theme';
 
 type Screen = 'login' | 'chatList' | 'chat';
-type ChatInfo = { id: string; name: string };
+type ChatInfo = { id: string; name: string; isGroup: boolean };
 
 const DRAWER_WIDTH = Dimensions.get('window').width * 0.75;
 
@@ -56,8 +56,8 @@ export default function App() {
     setScreen('chatList');
   }
 
-  function handleOpenChat(chatId: string, chatName: string) {
-    setCurrentChat({ id: chatId, name: chatName });
+  function handleOpenChat(chatId: string, chatName: string, isGroup: boolean = false) {
+    setCurrentChat({ id: chatId, name: chatName, isGroup });
     setScreen('chat');
   }
 
@@ -94,6 +94,8 @@ export default function App() {
             <ChatScreen
               chatId={currentChat.id}
               chatName={currentChat.name}
+              user={user}
+              isGroup={currentChat.isGroup}
               onBack={handleBackToList}
             />
           )}
