@@ -110,7 +110,6 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: 
               isMe={item.sender === user}
               showSender={showSender}
               onLongPress={handleLongPress}
-              onReply={handleReply}
               onReactionPress={handleReactionPress}
             />
           );
