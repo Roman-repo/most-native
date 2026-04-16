@@ -1,0 +1,17 @@
+node_modules/
+.expo/
+dist/
+npm-debug.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+ios/build/
+android/build/
+android/app/build/
+*.apk
+*.aab
+.env
+.env.local
