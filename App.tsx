@@ -4,35 +4,55 @@ import { StatusBar } from 'expo-status-bar';
 import { db } from './src/services/firebase';
 import { ref, get } from 'firebase/database';
 
+type Status = 'loading' | 'connected' | 'auth_required' | 'error';
+
 export default function App() {
-  const [status, setStatus] = useState<'loading' | 'ok' | 'error'>('loading');
+  const [status, setStatus] = useState<Status>('loading');
   const [chatCount, setChatCount] = useState(0);
+  const [errMsg, setErrMsg] = useState('');
 
   useEffect(() => {
     get(ref(db, 'chats'))
       .then((snap) => {
         const count = snap.exists() ? Object.keys(snap.val()).length : 0;
         setChatCount(count);
-        setStatus('ok');
+        setStatus('connected');
       })
-      .catch(() => setStatus('error'));
+      .catch((e: any) => {
+        const msg = (e?.message ?? e?.code ?? String(e)).toLowerCase();
+        // PERMISSION_DENIED = Firebase работает, просто правила требуют авторизацию
+        if (msg.includes('permission')) {
+          setStatus('auth_required');
+        } else {
+          setErrMsg(e?.message ?? String(e));
+          setStatus('error');
+        }
+      });
   }, []);
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Привет, Мост! 👋</Text>
+
       {status === 'loading' && (
         <>
           <ActivityIndicator color="#6C5CE7" style={{ marginTop: 16 }} />
           <Text style={styles.sub}>Подключаюсь к Firebase...</Text>
         </>
       )}
-      {status === 'ok' && (
-        <Text style={styles.ok}>✅ Подключено к Firebase, чатов в базе: {chatCount}</Text>
+
+      {status === 'connected' && (
+        <Text style={styles.ok}>✅ Firebase подключён, чатов в базе: {chatCount}</Text>
       )}
+
+      {status === 'auth_required' && (
+        <Text style={styles.ok}>✅ Firebase подключён (авторизация требуется — это нормально)</Text>
+      )}
+
       {status === 'error' && (
-        <Text style={styles.err}>❌ Ошибка подключения к Firebase</Text>
+        <Text style={styles.err}>❌ Ошибка сети: {errMsg}</Text>
       )}
+
       <StatusBar style="light" />
     </View>
   );
