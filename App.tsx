@@ -5,6 +5,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { getSession } from './src/services/auth';
 import { startPresence } from './src/services/presence';
+import { ref, get, set, serverTimestamp } from 'firebase/database';
+import { db } from './src/services/firebase';
 import LoginScreen from './src/screens/LoginScreen';
 import ChatListScreen from './src/screens/ChatListScreen';
 import ChatScreen from './src/screens/ChatScreen';
@@ -73,6 +75,20 @@ export default function App() {
     setScreen('chatList');
   }
 
+  async function handleOpenPrivate(otherUser: string) {
+    const cid = [user, otherUser].sort().join('__');
+    const snap = await get(ref(db, 'chats/' + cid));
+    if (!snap.val()) {
+      await set(ref(db, 'chats/' + cid), {
+        members: [user, otherUser],
+        lastText: '',
+        lastTs: serverTimestamp(),
+      });
+    }
+    setCurrentChat({ id: cid, name: otherUser, isGroup: false });
+    setScreen('chat');
+  }
+
   function handleLogout() {
     setUser('');
     setCurrentChat(null);
@@ -105,6 +121,7 @@ export default function App() {
               user={user}
               isGroup={currentChat.isGroup}
               onBack={handleBackToList}
+              onOpenPrivate={handleOpenPrivate}
             />
           )}
 

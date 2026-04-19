@@ -13,11 +13,13 @@ import {
 import { theme } from '../styles/theme';
 import MessageBubble from '../components/MessageBubble';
 import ReactionPicker from '../components/ReactionPicker';
+import ForwardModal from '../components/ForwardModal';
 import PinBar from '../components/PinBar';
 import ThemePicker from '../components/ThemePicker';
-import { IconBack, IconSmile, IconPaperclip, IconMic, IconSend, IconVideoNote } from '../components/Icons';
+import * as Clipboard from 'expo-clipboard';
+import { IconBack, IconSmile, IconPaperclip, IconMic, IconSend, IconVideoNote, IconReplyBar, IconClose, IconCtxEdit, IconCheck } from '../components/Icons';
 import VideoRecorder from '../components/VideoRecorder';
-import { sendVideoMsg } from '../managers/ChatManager';
+import { sendVideoMsg, editMessage, deleteMessage, forwardMessage } from '../managers/ChatManager';
 import EmojiPanel from '../components/EmojiPanel';
 import { getChatTheme, setChatTheme, type ChatTheme } from '../utils/chatThemes';
 import * as ImagePicker from 'expo-image-picker';
@@ -41,6 +43,7 @@ type Props = {
   user: string;
   isGroup: boolean;
   onBack: () => void;
+  onOpenPrivate?: (otherUser: string) => void;
 };
 
 type ReplyInfo = { sender: string; text: string };
@@ -53,7 +56,7 @@ function getAvatarColor(name: string): string {
 }
 
 
-export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: Props) {
+export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, onOpenPrivate }: Props) {
   const insets = useSafeAreaInsets();
   const inbBottomPad = Platform.OS === 'android' ? 6 : Math.max(insets.bottom, 20);
   // — Chat state —
@@ -63,6 +66,8 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: 
   const [replyTo, setReplyTo] = useState<ReplyInfo | null>(null);
   const [pickerVisible, setPickerVisible] = useState(false);
   const [selectedMsg, setSelectedMsg] = useState<Message | null>(null);
+  const [editMsg, setEditMsg] = useState<Message | null>(null);
+  const [forwardMsg, setForwardMsg] = useState<Message | null>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [chatTheme, setChatThemeState] = useState<ChatTheme | null>(null);
   const [themePickerOpen, setThemePickerOpen] = useState(false);
@@ -85,6 +90,9 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: 
   const urlRef = useRef<string | null>(null);
   const dotAnim = useRef(new Animated.Value(1)).current;
   const dotLoopRef = useRef<Animated.CompositeAnimation | null>(null);
+
+  // — Edit mode: saves text that was in input before edit started —
+  const prevTextRef = useRef('');
 
   // — Mic hold logic —
   const micHoldTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -341,6 +349,58 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: 
     await togglePin(chatId, selectedMsg._key);
   }, [selectedMsg, chatId]);
 
+  const handleCopy = useCallback(async () => {
+    if (!selectedMsg?.text) return;
+    await Clipboard.setStringAsync(selectedMsg.text);
+  }, [selectedMsg]);
+
+  const handleForward = useCallback(() => {
+    if (!selectedMsg) return;
+    setForwardMsg(selectedMsg);
+  }, [selectedMsg]);
+
+  const handleEdit = useCallback(() => {
+    if (!selectedMsg?.text) return;
+    const msg = selectedMsg;
+    prevTextRef.current = text;
+    setTimeout(() => {
+      setEditMsg(msg);
+      setText(msg.text ?? '');
+    }, 220);
+  }, [selectedMsg, text]);
+
+  const handleDelete = useCallback(async () => {
+    if (!selectedMsg) return;
+    await deleteMessage(chatId, selectedMsg._key);
+  }, [selectedMsg, chatId]);
+
+  const handlePrivate = useCallback(() => {
+    if (!selectedMsg || !onOpenPrivate) return;
+    onOpenPrivate(selectedMsg.sender);
+  }, [selectedMsg, onOpenPrivate]);
+
+  const handleEditSubmit = useCallback(async () => {
+    if (!editMsg) return;
+    const t = text.trim();
+    if (!t) return;
+    const msg = editMsg;
+    setEditMsg(null);
+    setText('');
+    await editMessage(chatId, msg._key, t);
+  }, [editMsg, text, chatId]);
+
+  const handleEditCancel = useCallback(() => {
+    setText(prevTextRef.current);
+    prevTextRef.current = '';
+    setEditMsg(null);
+  }, []);
+
+  const handleForwardPick = useCallback(async (targetChatId: string) => {
+    if (!forwardMsg) return;
+    await forwardMessage(targetChatId, user, forwardMsg);
+    setForwardMsg(null);
+  }, [forwardMsg, user]);
+
   const handleThemeSelect = useCallback(async (t: ChatTheme | null) => {
     setChatThemeState(t);
     await setChatTheme(chatId, t);
@@ -462,48 +522,61 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: 
         </BlurView>
 
         {/* Pin bar */}
-        <BlurView intensity={40} tint="dark" style={styles.pinBarWrap}>
+        <View style={styles.pinBarWrap}>
           <PinBar pins={pins} onPress={handlePinPress} />
-        </BlurView>
+        </View>
 
-        {/* Messages */}
+        {/* Messages + reply bar (absolute поверх списка) */}
         <Animated.View style={[styles.listWrap, { opacity: listOpacity }]}>
-        <FlatList
-          ref={flatListRef}
-          data={reversedMessages}
-          keyExtractor={(item) => item._key}
-          renderItem={renderItem}
-          inverted
-          onScroll={(e) => {
-            isNearBottomRef.current = e.nativeEvent.contentOffset.y < 80;
-          }}
-          scrollEventThrottle={100}
-          onContentSizeChange={handleContentSizeChange}
-          maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-          style={styles.list}
-          contentContainerStyle={styles.listContent}
-          maxToRenderPerBatch={10}
-          windowSize={10}
-          initialNumToRender={20}
-          ListEmptyComponent={
-            <View style={styles.emptyWrap}>
-              <Text style={styles.emptyText}>Начните общение 👋</Text>
-            </View>
-          }
-        />
+          <FlatList
+            ref={flatListRef}
+            data={reversedMessages}
+            keyExtractor={(item) => item._key}
+            renderItem={renderItem}
+            inverted
+            onScroll={(e) => {
+              isNearBottomRef.current = e.nativeEvent.contentOffset.y < 80;
+            }}
+            scrollEventThrottle={100}
+            onContentSizeChange={handleContentSizeChange}
+            maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+            style={styles.list}
+            contentContainerStyle={[styles.listContent, replyTo ? { paddingBottom: 60 } : undefined]}
+            maxToRenderPerBatch={10}
+            windowSize={10}
+            initialNumToRender={20}
+            ListEmptyComponent={
+              <View style={styles.emptyWrap}>
+                <Text style={styles.emptyText}>Начните общение 👋</Text>
+              </View>
+            }
+          />
         </Animated.View>
 
-        {/* Reply bar */}
+        {editMsg && (
+          <View style={styles.editBar}>
+            <IconCtxEdit size={28} color={theme.accent} />
+            <View style={styles.editBarContent}>
+              <Text style={styles.editBarLabel}>Редактирование</Text>
+              <Text style={styles.editBarMedia}>Нажмите, чтобы загрузить медиа</Text>
+            </View>
+            <TouchableOpacity onPress={handleEditCancel} style={styles.editBarClose}>
+              <IconClose size={16} color={theme.text2} />
+            </TouchableOpacity>
+          </View>
+        )}
 
         {replyTo && (
           <View style={styles.replyBar}>
-            <View style={styles.replyBarLine} />
-            <View style={styles.replyBarBody}>
-              <Text style={styles.replyBarAuthor}>{replyTo.sender}</Text>
+            <View style={styles.replyBarIcon}>
+              <IconReplyBar size={18} color={theme.accent} />
+            </View>
+            <View style={styles.replyBarContent}>
+              <Text style={styles.replyBarAuthor} numberOfLines={1}>В ответ {replyTo.sender}</Text>
               <Text style={styles.replyBarText} numberOfLines={1}>{replyTo.text || '📷'}</Text>
             </View>
             <TouchableOpacity onPress={() => setReplyTo(null)} style={styles.replyBarClose}>
-              <Text style={styles.replyBarX}>✕</Text>
+              <IconClose size={16} color={theme.text2} />
             </TouchableOpacity>
           </View>
         )}
@@ -545,7 +618,15 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: 
           </View>
 
           {/* Right button — always same position (web: rb-main / sbb) */}
-          {recording ? (
+          {editMsg ? (
+            <TouchableOpacity
+              style={[styles.roundBtn, styles.sbBtn, { backgroundColor: accentColor, shadowColor: accentColor }]}
+              onPress={handleEditSubmit}
+              activeOpacity={0.8}
+            >
+              <IconCheck size={20} color="#fff" />
+            </TouchableOpacity>
+          ) : recording ? (
             <TouchableOpacity
               style={[styles.roundBtn, styles.sbBtn, { backgroundColor: accentColor, shadowColor: accentColor }]}
               onPress={handleSendAudio}
@@ -592,7 +673,24 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: 
           onReact={handleReact}
           onReply={() => selectedMsg && handleReply(selectedMsg)}
           onPin={handlePin}
+          onCopy={selectedMsg?.text ? handleCopy : undefined}
+          onForward={handleForward}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          onPrivate={isGeneralChat && selectedMsg && selectedMsg.sender !== user ? handlePrivate : undefined}
           isMe={selectedMsg?.sender === user}
+          isPinned={!!(selectedMsg && pins.some(p => p.key === selectedMsg._key))}
+          canEdit={!!selectedMsg?.text}
+          canPrivate={!!(isGeneralChat && selectedMsg && selectedMsg.sender !== user && onOpenPrivate)}
+        />
+
+
+        <ForwardModal
+          visible={!!forwardMsg}
+          user={user}
+          excludeChatId={chatId}
+          onClose={() => setForwardMsg(null)}
+          onPick={handleForwardPick}
         />
 
         {themePickerOpen && (
@@ -625,7 +723,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: theme.border, overflow: 'hidden',
   },
   menuDots: { fontSize: 22, color: theme.text, lineHeight: 26 },
-  pinBarWrap: { overflow: 'hidden' },
+  pinBarWrap: { overflow: 'hidden', backgroundColor: 'rgba(15,12,41,0.82)' },
   headerBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 0 },
   headerAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
@@ -643,18 +741,31 @@ const styles = StyleSheet.create({
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60 },
   emptyText: { color: theme.text3, fontSize: 15 },
 
+  editBar: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderTopWidth: 1, borderTopColor: theme.border,
+    gap: 8,
+    backgroundColor: 'rgba(15,12,41,0.82)',
+  },
+  editBarContent: { flex: 1, minWidth: 0 },
+  editBarLabel: { fontSize: 13, color: theme.accent, fontWeight: '700', marginBottom: 1 },
+  editBarMedia: { fontSize: 12, color: theme.text2 },
+  editBarClose: { padding: 4, flexShrink: 0 },
+
+  /* .rb — gap:8, padding:8 12, background:--bg2, border-top:--brd */
   replyBar: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(15,12,41,0.9)',
     paddingHorizontal: 12, paddingVertical: 8,
-    borderTopWidth: 1, borderTopColor: theme.border, gap: 8,
+    borderTopWidth: 1, borderTopColor: theme.border,
+    gap: 8,
+    backgroundColor: 'rgba(15,12,41,0.82)',
   },
-  replyBarLine: { width: 3, height: 36, backgroundColor: theme.accent, borderRadius: 2 },
-  replyBarBody: { flex: 1 },
-  replyBarAuthor: { fontSize: 13, color: theme.accent, fontWeight: '500', marginBottom: 1 },
-  replyBarText: { fontSize: 14, color: theme.text2 },
-  replyBarClose: { padding: 4 },
-  replyBarX: { color: theme.text3, fontSize: 16 },
+  replyBarIcon: { flexShrink: 0, alignItems: 'center', justifyContent: 'center' },
+  replyBarContent: { flex: 1, minWidth: 0 },
+  replyBarAuthor: { fontSize: 13, color: theme.accent, fontWeight: '700', marginBottom: 1 },
+  replyBarText: { fontSize: 13, color: theme.text2 },
+  replyBarClose: { padding: 4, flexShrink: 0 },
 
   /* inb — always-rendered input bar container */
   inb: {
