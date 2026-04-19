@@ -25,6 +25,7 @@ import { fileToBase64 } from '../managers/MediaManager';
 import * as FileSystem from 'expo-file-system/legacy';
 import { listenUserPresence, formatLastSeen, type PresenceState } from '../services/presence';
 import { setTyping, stopTyping, listenTyping, formatTypingText } from '../services/typing';
+import { markRead, listenReadReceipts } from '../services/readReceipts';
 import TypingDots from '../components/TypingDots';
 import {
   listenMessages, sendMessage, sendAudio, sendSticker, sendAnimSticker,
@@ -360,6 +361,18 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: 
     return unsub;
   }, [chatId, user]);
 
+  const [maxOtherReadTs, setMaxOtherReadTs] = useState(0);
+  useEffect(() => {
+    if (!chatId || !user) return;
+    const unsub = listenReadReceipts(chatId, user, setMaxOtherReadTs);
+    return unsub;
+  }, [chatId, user]);
+
+  useEffect(() => {
+    if (!chatId || !user) return;
+    markRead(chatId, user);
+  }, [chatId, user, messages.length]);
+
   useEffect(() => {
     return () => { stopTyping(chatId, user); };
   }, [chatId, user]);
@@ -386,13 +399,14 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: 
     <MessageBubble
       message={item}
       isMe={item.sender === user}
+      isRead={item.sender === user && typeof item.ts === 'number' && item.ts > 0 && item.ts <= maxOtherReadTs}
       showSender={showSenderMap.get(item._key) ?? false}
       onLongPress={handleLongPress}
       onReactionPress={handleReactionPress}
       onReply={handleReply}
       bubbleColor={chatTheme?.acc}
     />
-  ), [user, showSenderMap, handleLongPress, handleReactionPress, handleReply, chatTheme]);
+  ), [user, showSenderMap, handleLongPress, handleReactionPress, handleReply, chatTheme, maxOtherReadTs]);
 
 
   const avatarBg = isGeneralChat ? theme.accent : isGroup ? '#00B894' : getAvatarColor(chatName);
