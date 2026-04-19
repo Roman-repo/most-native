@@ -8,6 +8,10 @@ export type Message = {
   image?: string;
   audio?: string;
   audioDur?: string;
+  vidMsg?: string;
+  vidDur?: string;
+  sticker?: string;
+  animSticker?: string;
   ts: number;
   replyTo?: { sender: string; text: string };
   reactions?: Record<string, { user: string; emoji: string }>;
@@ -44,6 +48,57 @@ export async function sendMessage(
     lastText: text.trim(),
     lastTs: serverTimestamp(),
   });
+}
+
+export async function sendImage(
+  chatId: string,
+  sender: string,
+  imageUrl: string,
+): Promise<void> {
+  await push(ref(db, 'messages/' + chatId), { sender, image: imageUrl, ts: serverTimestamp() });
+  await update(ref(db, 'chats/' + chatId), { lastText: '📷 Фото', lastTs: serverTimestamp() });
+}
+
+export async function sendAudio(
+  chatId: string,
+  sender: string,
+  audioUrl: string,
+  duration: number,
+): Promise<void> {
+  const d = Math.round(duration);
+  const audioDur = `${Math.floor(d / 60)}:${String(d % 60).padStart(2, '0')}`;
+  await push(ref(db, 'messages/' + chatId), { sender, audio: audioUrl, audioDur, ts: serverTimestamp() });
+  await update(ref(db, 'chats/' + chatId), { lastText: '🎤 Голосовое', lastTs: serverTimestamp() });
+}
+
+export async function sendVideoMsg(
+  chatId: string,
+  sender: string,
+  vidMsg: string,
+  duration: number,
+): Promise<void> {
+  const d = Math.round(duration);
+  const vidDur = `${Math.floor(d / 60)}:${String(d % 60).padStart(2, '0')}`;
+  await push(ref(db, 'messages/' + chatId), { sender, vidMsg, vidDur, ts: serverTimestamp() });
+  await update(ref(db, 'chats/' + chatId), { lastText: '🎥 Видео', lastTs: serverTimestamp() });
+}
+
+export async function sendSticker(
+  chatId: string,
+  sender: string,
+  sticker: string,
+): Promise<void> {
+  await push(ref(db, 'messages/' + chatId), { sender, sticker, ts: serverTimestamp() });
+  await update(ref(db, 'chats/' + chatId), { lastText: sticker, lastTs: serverTimestamp() });
+}
+
+export async function sendAnimSticker(
+  chatId: string,
+  sender: string,
+  animSticker: string,
+): Promise<void> {
+  await push(ref(db, 'messages/' + chatId), { sender, animSticker, ts: serverTimestamp() });
+  await update(ref(db, 'chats/' + chatId), { lastText: '✨ Стикер', lastTs: serverTimestamp() });
 }
 
 export async function toggleReaction(

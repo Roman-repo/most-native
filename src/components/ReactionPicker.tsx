@@ -58,7 +58,7 @@ export default function ReactionPicker({ visible, onClose, onReact, onReply, onP
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   sheet: {
-    backgroundColor: theme.bg2,
+    backgroundColor: '#0f0c29',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingBottom: 32,

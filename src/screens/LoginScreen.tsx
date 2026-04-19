@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
   },
   input: {
     width: '100%',
-    backgroundColor: theme.bg2,
+    backgroundColor: '#0f0c29',
     borderRadius: 12,
     padding: 14,
     fontSize: 16,

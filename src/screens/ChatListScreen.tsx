@@ -3,6 +3,7 @@ import {
   View, Text, FlatList, TouchableOpacity,
   StyleSheet, ActivityIndicator,
 } from 'react-native';
+import Svg, { Line } from 'react-native-svg';
 import { db } from '../services/firebase';
 import { ref, onValue, off } from 'firebase/database';
 import { theme } from '../styles/theme';
@@ -32,7 +33,6 @@ export default function ChatListScreen({ user, onOpenChat, onOpenDrawer }: Props
       const data = snap.val() || {};
       const list: Chat[] = [];
 
-      // Общий чат всегда первым
       const g = data['general'] || {};
       list.push({
         id: 'general',
@@ -59,7 +59,6 @@ export default function ChatListScreen({ user, onOpenChat, onOpenDrawer }: Props
         });
       });
 
-      // Общий чат закреплён сверху, остальные по времени
       list.sort((a, b) => {
         if (a.isGeneral) return -1;
         if (b.isGeneral) return 1;
@@ -111,8 +110,12 @@ export default function ChatListScreen({ user, onOpenChat, onOpenDrawer }: Props
     <View style={styles.container}>
       {/* Хедер */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={onOpenDrawer} style={styles.menuBtn}>
-          <Text style={styles.menuIcon}>☰</Text>
+        <TouchableOpacity onPress={onOpenDrawer} style={styles.menuBtn} activeOpacity={0.6}>
+          <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+            <Line x1="3" y1="6" x2="21" y2="6" stroke={theme.text} strokeWidth="2" strokeLinecap="round" />
+            <Line x1="3" y1="12" x2="21" y2="12" stroke={theme.text} strokeWidth="2" strokeLinecap="round" />
+            <Line x1="3" y1="18" x2="21" y2="18" stroke={theme.text} strokeWidth="2" strokeLinecap="round" />
+          </Svg>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Мост</Text>
         <View style={{ width: 40 }} />
@@ -122,15 +125,21 @@ export default function ChatListScreen({ user, onOpenChat, onOpenDrawer }: Props
         data={chats}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <TouchableOpacity style={styles.chatItem} onPress={() => onOpenChat(item.id, item.name, item.isGroup || item.isGeneral)}>
+          <TouchableOpacity
+            style={styles.chatItem}
+            onPress={() => onOpenChat(item.id, item.name, item.isGroup || item.isGeneral)}
+            activeOpacity={0.7}
+          >
             <View style={[styles.avatar, { backgroundColor: getAvatarBg(item) }]}>
               <Text style={styles.avatarText}>{getAvatar(item)}</Text>
             </View>
             <View style={styles.chatInfo}>
-              <Text style={styles.chatName} numberOfLines={1}>{item.name}</Text>
+              <View style={styles.chatTop}>
+                <Text style={styles.chatName} numberOfLines={1}>{item.name}</Text>
+                <Text style={styles.chatTime}>{formatTime(item.lastTs)}</Text>
+              </View>
               <Text style={styles.chatPreview} numberOfLines={1}>{item.lastText || 'Нет сообщений'}</Text>
             </View>
-            <Text style={styles.chatTime}>{formatTime(item.lastTs)}</Text>
           </TouchableOpacity>
         )}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
@@ -145,39 +154,44 @@ export default function ChatListScreen({ user, onOpenChat, onOpenDrawer }: Props
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
   center: { flex: 1, backgroundColor: theme.bg, alignItems: 'center', justifyContent: 'center' },
+
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingTop: 52,
-    paddingBottom: 12,
+    paddingBottom: 14,
     paddingHorizontal: 16,
-    backgroundColor: theme.bg2,
+    backgroundColor: 'rgba(15,12,41,0.78)',
     borderBottomWidth: 1,
     borderBottomColor: theme.border,
   },
-  menuBtn: { width: 40, alignItems: 'flex-start' },
-  menuIcon: { fontSize: 22, color: theme.text },
+  menuBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: theme.text },
+
   chatItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
+    gap: 14,
   },
   avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    flexShrink: 0,
   },
   avatarText: { fontSize: 20, color: '#fff' },
-  chatInfo: { flex: 1 },
-  chatName: { fontSize: 16, fontWeight: '600', color: theme.text, marginBottom: 3 },
-  chatPreview: { fontSize: 14, color: theme.text2 },
-  chatTime: { fontSize: 12, color: theme.text3, marginLeft: 8 },
+
+  chatInfo: { flex: 1, minWidth: 0 },
+  chatTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 },
+  chatName: { fontSize: 16, fontWeight: '500', color: theme.text, flex: 1, marginRight: 8 },
+  chatTime: { fontSize: 12, color: theme.text3, flexShrink: 0 },
+  chatPreview: { fontSize: 14, color: theme.text3 },
+
   separator: { height: 1, backgroundColor: theme.border, marginLeft: 80 },
   empty: { textAlign: 'center', color: theme.text3, marginTop: 60, fontSize: 15 },
 });
