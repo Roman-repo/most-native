@@ -1,6 +1,6 @@
 {
   "name": "most-native",
-  "version": "4.1.1",
+  "version": "4.2.0",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",

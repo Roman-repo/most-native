@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
   StyleSheet, ActivityIndicator,
@@ -7,6 +7,7 @@ import Svg, { Line } from 'react-native-svg';
 import { db } from '../services/firebase';
 import { ref, onValue, off } from 'firebase/database';
 import { theme } from '../styles/theme';
+import { listenUserPresence } from '../services/presence';
 
 type Chat = {
   id: string;
@@ -15,6 +16,7 @@ type Chat = {
   lastTs: number;
   isGeneral: boolean;
   isGroup: boolean;
+  otherUser: string | null;
 };
 
 type Props = {
@@ -41,6 +43,7 @@ export default function ChatListScreen({ user, onOpenChat, onOpenDrawer }: Props
         lastTs: g.lastTs || 0,
         isGeneral: true,
         isGroup: false,
+        otherUser: null,
       });
 
       Object.keys(data).forEach((k) => {
@@ -49,13 +52,15 @@ export default function ChatListScreen({ user, onOpenChat, onOpenDrawer }: Props
         if (!r.members || !r.members.includes(user)) return;
         const others = r.members.filter((m: string) => m !== user);
         const name = r.groupName || others.join(', ');
+        const isGroup = r.members.length > 2;
         list.push({
           id: k,
           name,
           lastText: r.lastText || '',
           lastTs: r.lastTs || 0,
           isGeneral: false,
-          isGroup: r.members.length > 2,
+          isGroup,
+          otherUser: isGroup ? null : (others[0] || null),
         });
       });
 
@@ -71,6 +76,23 @@ export default function ChatListScreen({ user, onOpenChat, onOpenDrawer }: Props
 
     return () => off(chatsRef, 'value', unsub);
   }, [user]);
+
+  const [onlineMap, setOnlineMap] = useState<Record<string, boolean>>({});
+  const otherUsers = useMemo(() => {
+    const set = new Set<string>();
+    chats.forEach(c => { if (c.otherUser) set.add(c.otherUser); });
+    return Array.from(set);
+  }, [chats]);
+
+  useEffect(() => {
+    if (otherUsers.length === 0) return;
+    const unsubs = otherUsers.map(u =>
+      listenUserPresence(u, (st) => {
+        setOnlineMap(prev => prev[u] === st.online ? prev : { ...prev, [u]: st.online });
+      })
+    );
+    return () => { unsubs.forEach(fn => fn()); };
+  }, [otherUsers.join('|')]);
 
   function formatTime(ts: number): string {
     if (!ts) return '';
@@ -130,8 +152,13 @@ export default function ChatListScreen({ user, onOpenChat, onOpenDrawer }: Props
             onPress={() => onOpenChat(item.id, item.name, item.isGroup || item.isGeneral)}
             activeOpacity={0.7}
           >
-            <View style={[styles.avatar, { backgroundColor: getAvatarBg(item) }]}>
-              <Text style={styles.avatarText}>{getAvatar(item)}</Text>
+            <View style={styles.avatarWrap}>
+              <View style={[styles.avatar, { backgroundColor: getAvatarBg(item) }]}>
+                <Text style={styles.avatarText}>{getAvatar(item)}</Text>
+              </View>
+              {item.otherUser && onlineMap[item.otherUser] && (
+                <View style={styles.onlineDot} />
+              )}
             </View>
             <View style={styles.chatInfo}>
               <View style={styles.chatTop}>
@@ -176,15 +203,23 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 14,
   },
+  avatarWrap: { width: 50, height: 50, position: 'relative', flexShrink: 0 },
   avatar: {
     width: 50,
     height: 50,
     borderRadius: 25,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
   },
   avatarText: { fontSize: 20, color: '#fff' },
+  onlineDot: {
+    position: 'absolute',
+    bottom: 2, right: 2,
+    width: 13, height: 13, borderRadius: 7,
+    backgroundColor: '#4CAF50',
+    borderWidth: 2,
+    borderColor: theme.bg,
+  },
 
   chatInfo: { flex: 1, minWidth: 0 },
   chatTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 },

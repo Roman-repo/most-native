@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { getSession } from './src/services/auth';
+import { startPresence } from './src/services/presence';
 import LoginScreen from './src/screens/LoginScreen';
 import ChatListScreen from './src/screens/ChatListScreen';
 import ChatScreen from './src/screens/ChatScreen';
@@ -33,6 +34,13 @@ export default function App() {
       })
       .catch(() => {});
   }, []);
+
+  // Presence: пока user залогинен — держим онлайн-статус
+  useEffect(() => {
+    if (!user) return;
+    const stop = startPresence(user);
+    return stop;
+  }, [user]);
 
   function openDrawer() {
     setDrawerOpen(true);
