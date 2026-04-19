@@ -9,6 +9,7 @@ import { ref, onValue, off } from 'firebase/database';
 import { theme } from '../styles/theme';
 import { listenUserPresence } from '../services/presence';
 import { listenTyping } from '../services/typing';
+import { listenUnread } from '../services/unread';
 
 type Chat = {
   id: string;
@@ -95,6 +96,21 @@ export default function ChatListScreen({ user, onOpenChat, onOpenDrawer }: Props
     return () => { unsubs.forEach(fn => fn()); };
   }, [otherUsers.join('|')]);
 
+  const [unreadMap, setUnreadMap] = useState<Record<string, { count: number; capped: boolean }>>({});
+  useEffect(() => {
+    if (chats.length === 0) return;
+    const unsubs = chats.map(c =>
+      listenUnread(c.id, user, (count, capped) => {
+        setUnreadMap(prev => {
+          const cur = prev[c.id];
+          if (cur && cur.count === count && cur.capped === capped) return prev;
+          return { ...prev, [c.id]: { count, capped } };
+        });
+      })
+    );
+    return () => { unsubs.forEach(fn => fn()); };
+  }, [chats.map(c => c.id).join('|'), user]);
+
   const [typingMap, setTypingMap] = useState<Record<string, boolean>>({});
   useEffect(() => {
     if (chats.length === 0) return;
@@ -178,11 +194,20 @@ export default function ChatListScreen({ user, onOpenChat, onOpenDrawer }: Props
                 <Text style={styles.chatName} numberOfLines={1}>{item.name}</Text>
                 <Text style={styles.chatTime}>{formatTime(item.lastTs)}</Text>
               </View>
-              {typingMap[item.id] ? (
-                <Text style={[styles.chatPreview, styles.chatPreviewTyping]} numberOfLines={1}>печатает...</Text>
-              ) : (
-                <Text style={styles.chatPreview} numberOfLines={1}>{item.lastText || 'Нет сообщений'}</Text>
-              )}
+              <View style={styles.chatBottom}>
+                {typingMap[item.id] ? (
+                  <Text style={[styles.chatPreview, styles.chatPreviewTyping]} numberOfLines={1}>печатает...</Text>
+                ) : (
+                  <Text style={styles.chatPreview} numberOfLines={1}>{item.lastText || 'Нет сообщений'}</Text>
+                )}
+                {unreadMap[item.id]?.count > 0 && (
+                  <View style={styles.unreadBadge}>
+                    <Text style={styles.unreadText}>
+                      {unreadMap[item.id].capped ? '50+' : unreadMap[item.id].count}
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
           </TouchableOpacity>
         )}
@@ -242,8 +267,17 @@ const styles = StyleSheet.create({
   chatTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 },
   chatName: { fontSize: 16, fontWeight: '500', color: theme.text, flex: 1, marginRight: 8 },
   chatTime: { fontSize: 12, color: theme.text3, flexShrink: 0 },
-  chatPreview: { fontSize: 14, color: theme.text3 },
+  chatBottom: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  chatPreview: { flex: 1, fontSize: 14, color: theme.text3 },
   chatPreviewTyping: { color: '#4CAF50', fontStyle: 'italic' },
+  unreadBadge: {
+    minWidth: 22, height: 22, borderRadius: 11,
+    backgroundColor: theme.accent,
+    paddingHorizontal: 7,
+    alignItems: 'center', justifyContent: 'center',
+    flexShrink: 0,
+  },
+  unreadText: { color: '#fff', fontSize: 12, fontWeight: '600' },
 
   separator: { height: 1, backgroundColor: theme.border, marginLeft: 80 },
   empty: { textAlign: 'center', color: theme.text3, marginTop: 60, fontSize: 15 },
