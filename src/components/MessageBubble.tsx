@@ -13,12 +13,19 @@ import type { Message } from '../managers/ChatManager';
 type Props = {
   message: Message;
   isMe: boolean;
+  isRead: boolean;
   showSender: boolean;
   onLongPress: (msg: Message) => void;
   onReactionPress: (msgKey: string, emoji: string) => void;
   onReply: (msg: Message) => void;
   bubbleColor?: string;
 };
+
+const READ_COLOR = '#55EFC4';
+
+function CheckMark({ read }: { read: boolean }) {
+  return <Text style={[styles.check, read ? styles.checkRead : styles.checkSent]}>{read ? ' ✓✓' : ' ✓'}</Text>;
+}
 
 const SENDER_COLORS = ['#E85D75','#6C5CE7','#00B894','#FDCB6E','#E17055','#0984E3','#A29BFE','#55EFC4'];
 function senderColor(name: string): string {
@@ -179,7 +186,7 @@ function VideoBubble({ url, duration, msgKey }: { url: string; duration: string;
   );
 }
 
-const MessageBubble = memo(function MessageBubble({ message: m, isMe, showSender, onLongPress, onReactionPress, onReply, bubbleColor }: Props) {
+const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, showSender, onLongPress, onReactionPress, onReply, bubbleColor }: Props) {
   const translateX = useRef(new Animated.Value(0)).current;
   const replyOpacity = useRef(new Animated.Value(0)).current;
 
@@ -270,7 +277,7 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, showSender
                 <Image source={{ uri: m.image }} style={styles.msgImage} resizeMode="cover" />
                 <View style={styles.meta}>
                   <Text style={[styles.time, isMe ? styles.timeMe : styles.timeOther]}>{formatTime(m.ts)}</Text>
-                  {isMe && <Text style={styles.check}>✓</Text>}
+                  {isMe && <CheckMark read={isRead} />}
                 </View>
               </View>
             )}
@@ -279,7 +286,7 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, showSender
                 <AudioBubble url={m.audio} duration={m.audioDur || '0:00'} msgKey={m._key} />
                 <View style={styles.meta}>
                   <Text style={[styles.time, isMe ? styles.timeMe : styles.timeOther]}>{formatTime(m.ts)}</Text>
-                  {isMe && <Text style={styles.check}>✓</Text>}
+                  {isMe && <CheckMark read={isRead} />}
                 </View>
               </View>
             )}
@@ -288,14 +295,14 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, showSender
                 <VideoBubble url={m.vidMsg} duration={m.vidDur || ''} msgKey={m._key} />
                 <View style={[styles.meta, { marginTop: 4 }]}>
                   <Text style={[styles.time, isMe ? styles.timeMe : styles.timeOther]}>{formatTime(m.ts)}</Text>
-                  {isMe && <Text style={styles.check}>✓</Text>}
+                  {isMe && <CheckMark read={isRead} />}
                 </View>
               </View>
             )}
             {!m.sticker && !m.animSticker && !m.image && !m.audio && !m.vidMsg && (() => {
               const timeStr = formatTime(m.ts);
               const editedPrefix = m.edited ? 'изм. ' : '';
-              const checkSuffix = isMe ? ' ✓' : '';
+              const checkSuffix = isMe ? (isRead ? ' ✓✓' : ' ✓') : '';
               const spacerChars = Math.ceil((editedPrefix.length + timeStr.length + checkSuffix.length) * 1.4) + 3;
               const spacer = '\u00A0'.repeat(spacerChars);
               return (
@@ -318,7 +325,7 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, showSender
                   <View style={styles.timeInline} pointerEvents="none">
                     {m.edited && <Text style={styles.edited}>изм. </Text>}
                     <Text style={[styles.time, isMe ? styles.timeMe : styles.timeOther]}>{timeStr}</Text>
-                    {isMe && <Text style={[styles.check, isMe ? styles.timeMe : styles.timeOther]}>{' ✓'}</Text>}
+                    {isMe && <CheckMark read={isRead} />}
                   </View>
                 </View>
               );
@@ -349,6 +356,7 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, showSender
   prev.message.sticker === next.message.sticker &&
   JSON.stringify(prev.message.reactions) === JSON.stringify(next.message.reactions) &&
   prev.isMe === next.isMe &&
+  prev.isRead === next.isRead &&
   prev.showSender === next.showSender &&
   prev.bubbleColor === next.bubbleColor
 );
@@ -420,7 +428,9 @@ const styles = StyleSheet.create({
   timeMe: { color: 'rgba(255,255,255,0.85)' },
   timeOther: { color: 'rgba(255,255,255,0.5)' },
   time: { fontSize: 12 },
-  check: { fontSize: 11, color: 'rgba(255,255,255,0.85)', marginLeft: 1 },
+  check: { fontSize: 11, marginLeft: 1 },
+  checkSent: { color: 'rgba(255,255,255,0.85)' },
+  checkRead: { color: READ_COLOR },
 
   stickerEmoji: { fontSize: 64, lineHeight: 72 },
   imageBubble: { padding: 4 },
