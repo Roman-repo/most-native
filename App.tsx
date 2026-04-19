@@ -1,91 +1,141 @@
-import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View, ActivityIndicator } from 'react-native';
+import { useEffect, useState, useRef } from 'react';
+import { View, StyleSheet, Animated, TouchableOpacity, Dimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { db } from './src/services/firebase';
-import { ref, get } from 'firebase/database';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { getSession } from './src/services/auth';
+import LoginScreen from './src/screens/LoginScreen';
+import ChatListScreen from './src/screens/ChatListScreen';
+import ChatScreen from './src/screens/ChatScreen';
+import DrawerContent from './src/screens/DrawerContent';
+import { theme } from './src/styles/theme';
 
-type Status = 'loading' | 'connected' | 'auth_required' | 'error';
+type Screen = 'login' | 'chatList' | 'chat';
+type ChatInfo = { id: string; name: string; isGroup: boolean };
+
+const DRAWER_WIDTH = Dimensions.get('window').width * 0.75;
 
 export default function App() {
-  const [status, setStatus] = useState<Status>('loading');
-  const [chatCount, setChatCount] = useState(0);
-  const [errMsg, setErrMsg] = useState('');
+  const [screen, setScreen] = useState<Screen>('login');
+  const [user, setUser] = useState('');
+  const [currentChat, setCurrentChat] = useState<ChatInfo | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const drawerAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
 
+  // Автологин при запуске
   useEffect(() => {
-    get(ref(db, 'chats'))
-      .then((snap) => {
-        const count = snap.exists() ? Object.keys(snap.val()).length : 0;
-        setChatCount(count);
-        setStatus('connected');
-      })
-      .catch((e: any) => {
-        const msg = (e?.message ?? e?.code ?? String(e)).toLowerCase();
-        // PERMISSION_DENIED = Firebase работает, просто правила требуют авторизацию
-        if (msg.includes('permission')) {
-          setStatus('auth_required');
-        } else {
-          setErrMsg(e?.message ?? String(e));
-          setStatus('error');
+    getSession()
+      .then((session) => {
+        if (session) {
+          setUser(session.user);
+          setScreen('chatList');
         }
-      });
+      })
+      .catch(() => {});
   }, []);
 
+  function openDrawer() {
+    setDrawerOpen(true);
+    Animated.timing(drawerAnim, {
+      toValue: 0,
+      duration: 250,
+      useNativeDriver: true,
+    }).start();
+  }
+
+  function closeDrawer() {
+    Animated.timing(drawerAnim, {
+      toValue: -DRAWER_WIDTH,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => setDrawerOpen(false));
+  }
+
+  function handleLogin(userName: string) {
+    setUser(userName);
+    setScreen('chatList');
+  }
+
+  function handleOpenChat(chatId: string, chatName: string, isGroup: boolean = false) {
+    setCurrentChat({ id: chatId, name: chatName, isGroup });
+    setScreen('chat');
+  }
+
+  function handleBackToList() {
+    setScreen('chatList');
+  }
+
+  function handleLogout() {
+    setUser('');
+    setCurrentChat(null);
+    setDrawerOpen(false);
+    setScreen('login');
+  }
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Привет, Мост! 👋</Text>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <View style={styles.root}>
+          <StatusBar style="light" />
 
-      {status === 'loading' && (
-        <>
-          <ActivityIndicator color="#6C5CE7" style={{ marginTop: 16 }} />
-          <Text style={styles.sub}>Подключаюсь к Firebase...</Text>
-        </>
-      )}
+          {screen === 'login' && (
+            <LoginScreen onLogin={handleLogin} />
+          )}
 
-      {status === 'connected' && (
-        <Text style={styles.ok}>✅ Firebase подключён, чатов в базе: {chatCount}</Text>
-      )}
+          {screen === 'chatList' && (
+            <ChatListScreen
+              user={user}
+              onOpenChat={handleOpenChat}
+              onOpenDrawer={openDrawer}
+            />
+          )}
 
-      {status === 'auth_required' && (
-        <Text style={styles.ok}>✅ Firebase подключён (авторизация требуется — это нормально)</Text>
-      )}
+          {screen === 'chat' && currentChat && (
+            <ChatScreen
+              chatId={currentChat.id}
+              chatName={currentChat.name}
+              user={user}
+              isGroup={currentChat.isGroup}
+              onBack={handleBackToList}
+            />
+          )}
 
-      {status === 'error' && (
-        <Text style={styles.err}>❌ Ошибка сети: {errMsg}</Text>
-      )}
+          {/* Drawer overlay */}
+          {drawerOpen && (
+            <TouchableOpacity
+              style={styles.overlay}
+              activeOpacity={1}
+              onPress={closeDrawer}
+            />
+          )}
 
-      <StatusBar style="light" />
-    </View>
+          {/* Drawer panel */}
+          <Animated.View
+            style={[styles.drawer, { width: DRAWER_WIDTH, transform: [{ translateX: drawerAnim }] }]}
+          >
+            <DrawerContent
+              user={user}
+              onLogout={handleLogout}
+              onClose={closeDrawer}
+            />
+          </Animated.View>
+        </View>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#1a1a2e',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
+  root: { flex: 1, backgroundColor: theme.bg },
+  overlay: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 10,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  sub: {
-    marginTop: 8,
-    color: '#aaa',
-    fontSize: 14,
-  },
-  ok: {
-    marginTop: 16,
-    color: '#00B894',
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  err: {
-    marginTop: 16,
-    color: '#E85D75',
-    fontSize: 16,
-    textAlign: 'center',
+  drawer: {
+    position: 'absolute',
+    top: 0, left: 0, bottom: 0,
+    zIndex: 20,
   },
 });

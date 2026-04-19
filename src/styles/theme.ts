@@ -1,0 +1,15 @@
+export const theme = {
+  bg: '#0a0a1a',
+  bg2: 'rgba(15,12,41,0.78)',
+  bg2solid: '#0f0c29',
+  bg3: 'rgba(255,255,255,0.08)',
+  accent: '#667eea',
+  accent2: '#764ba2',
+  text: '#ffffff',
+  text2: 'rgba(255,255,255,0.5)',
+  text3: 'rgba(255,255,255,0.3)',
+  red: '#E85D75',
+  green: '#00b894',
+  yellow: '#FDCB6E',
+  border: 'rgba(255,255,255,0.08)',
+};
