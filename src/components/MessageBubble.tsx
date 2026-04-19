@@ -306,40 +306,45 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
               const spacerChars = Math.ceil((editedPrefix.length + timeStr.length + checkSuffix.length) * 1.4) + 3;
               const spacer = '\u00A0'.repeat(spacerChars);
               return (
-                <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther, isMe && bubbleColor ? { backgroundColor: bubbleColor, shadowColor: bubbleColor } : undefined]}>
-                  {m.replyTo && (
-                    <View style={styles.replyQuote}>
-                      <View style={styles.replyLine} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.replyAuthor}>{m.replyTo.sender}</Text>
-                        <Text style={styles.replyText} numberOfLines={1}>{m.replyTo.text || 'медиа'}</Text>
+                <View>
+                  <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther, isMe && bubbleColor ? { backgroundColor: bubbleColor, shadowColor: bubbleColor } : undefined]}>
+                    {m.forwarded && (
+                      <Text style={styles.forwarded}>↪ Переслано от {m.forwarded}</Text>
+                    )}
+                    {m.replyTo && (
+                      <View style={styles.replyQuote}>
+                        <View style={styles.replyLine} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.replyAuthor}>{m.replyTo.sender}</Text>
+                          <Text style={styles.replyText} numberOfLines={1}>{m.replyTo.text || 'медиа'}</Text>
+                        </View>
                       </View>
+                    )}
+                    {m.text ? (
+                      <Text style={styles.text}>
+                        {m.text}
+                        <Text style={styles.timeSpacer}>{spacer}</Text>
+                      </Text>
+                    ) : null}
+                    <View style={styles.timeInline} pointerEvents="none">
+                      {m.edited && <Text style={styles.edited}>изм. </Text>}
+                      <Text style={[styles.time, isMe ? styles.timeMe : styles.timeOther]}>{timeStr}</Text>
+                      {isMe && <CheckMark read={isRead} />}
+                    </View>
+                  </View>
+                  {reactionEntries.length > 0 && (
+                    <View style={[styles.reactionsRow, isMe ? styles.reactionsRowMe : styles.reactionsRowOther]}>
+                      {reactionEntries.map(([emoji, count]) => (
+                        <TouchableOpacity key={emoji} style={styles.reactionBadge} onPress={() => onReactionPress(m._key, emoji)}>
+                          <Text style={styles.reactionEmoji}>{emoji}</Text>
+                          {count > 1 && <Text style={styles.reactionCount}>{count}</Text>}
+                        </TouchableOpacity>
+                      ))}
                     </View>
                   )}
-                  {m.text ? (
-                    <Text style={styles.text}>
-                      {m.text}
-                      <Text style={styles.timeSpacer}>{spacer}</Text>
-                    </Text>
-                  ) : null}
-                  <View style={styles.timeInline} pointerEvents="none">
-                    {m.edited && <Text style={styles.edited}>изм. </Text>}
-                    <Text style={[styles.time, isMe ? styles.timeMe : styles.timeOther]}>{timeStr}</Text>
-                    {isMe && <CheckMark read={isRead} />}
-                  </View>
                 </View>
               );
             })()}
-            {reactionEntries.length > 0 && (
-              <View style={[styles.reactions, isMe ? styles.reactionsMe : styles.reactionsOther]}>
-                {reactionEntries.map(([emoji, count]) => (
-                  <TouchableOpacity key={emoji} style={styles.reactionBadge} onPress={() => onReactionPress(m._key, emoji)}>
-                    <Text style={styles.reactionEmoji}>{emoji}</Text>
-                    {count > 1 && <Text style={styles.reactionCount}>{count}</Text>}
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
           </TouchableOpacity>
         </Animated.View>
       </Animated.View>
@@ -350,6 +355,7 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
   prev.message._key === next.message._key &&
   prev.message.text === next.message.text &&
   prev.message.edited === next.message.edited &&
+  prev.message.forwarded === next.message.forwarded &&
   prev.message.audio === next.message.audio &&
   prev.message.image === next.message.image &&
   prev.message.vidMsg === next.message.vidMsg &&
@@ -418,6 +424,7 @@ const styles = StyleSheet.create({
   },
   replyAuthor: { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.85)', marginBottom: 1 },
   replyText: { fontSize: 12, color: 'rgba(255,255,255,0.6)' },
+  forwarded: { fontSize: 12, fontStyle: 'italic', color: 'rgba(255,255,255,0.7)', marginBottom: 4 },
 
   text: { fontSize: 16, lineHeight: 20.8, color: '#ffffff' },
 
@@ -472,9 +479,9 @@ const styles = StyleSheet.create({
   },
   vidDurText: { color: '#fff', fontSize: 11 },
 
-  reactions: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 3 },
-  reactionsMe: { justifyContent: 'flex-end' },
-  reactionsOther: { justifyContent: 'flex-start' },
+  reactionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 2, paddingHorizontal: 12 },
+  reactionsRowMe: { justifyContent: 'flex-end' },
+  reactionsRowOther: { justifyContent: 'flex-start' },
   reactionBadge: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -13,11 +13,14 @@ import {
 import { theme } from '../styles/theme';
 import MessageBubble from '../components/MessageBubble';
 import ReactionPicker from '../components/ReactionPicker';
+import EditPanel from '../components/EditPanel';
+import ForwardModal from '../components/ForwardModal';
 import PinBar from '../components/PinBar';
 import ThemePicker from '../components/ThemePicker';
-import { IconBack, IconSmile, IconPaperclip, IconMic, IconSend, IconVideoNote } from '../components/Icons';
+import * as Clipboard from 'expo-clipboard';
+import { IconBack, IconSmile, IconPaperclip, IconMic, IconSend, IconVideoNote, IconReplyBar, IconClose } from '../components/Icons';
 import VideoRecorder from '../components/VideoRecorder';
-import { sendVideoMsg } from '../managers/ChatManager';
+import { sendVideoMsg, editMessage, deleteMessage, forwardMessage } from '../managers/ChatManager';
 import EmojiPanel from '../components/EmojiPanel';
 import { getChatTheme, setChatTheme, type ChatTheme } from '../utils/chatThemes';
 import * as ImagePicker from 'expo-image-picker';
@@ -41,6 +44,7 @@ type Props = {
   user: string;
   isGroup: boolean;
   onBack: () => void;
+  onOpenPrivate?: (otherUser: string) => void;
 };
 
 type ReplyInfo = { sender: string; text: string };
@@ -53,7 +57,7 @@ function getAvatarColor(name: string): string {
 }
 
 
-export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: Props) {
+export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, onOpenPrivate }: Props) {
   const insets = useSafeAreaInsets();
   const inbBottomPad = Platform.OS === 'android' ? 6 : Math.max(insets.bottom, 20);
   // — Chat state —
@@ -63,6 +67,8 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: 
   const [replyTo, setReplyTo] = useState<ReplyInfo | null>(null);
   const [pickerVisible, setPickerVisible] = useState(false);
   const [selectedMsg, setSelectedMsg] = useState<Message | null>(null);
+  const [editMsg, setEditMsg] = useState<Message | null>(null);
+  const [forwardMsg, setForwardMsg] = useState<Message | null>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [chatTheme, setChatThemeState] = useState<ChatTheme | null>(null);
   const [themePickerOpen, setThemePickerOpen] = useState(false);
@@ -341,6 +347,43 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: 
     await togglePin(chatId, selectedMsg._key);
   }, [selectedMsg, chatId]);
 
+  const handleCopy = useCallback(async () => {
+    if (!selectedMsg?.text) return;
+    await Clipboard.setStringAsync(selectedMsg.text);
+  }, [selectedMsg]);
+
+  const handleForward = useCallback(() => {
+    if (!selectedMsg) return;
+    setForwardMsg(selectedMsg);
+  }, [selectedMsg]);
+
+  const handleEdit = useCallback(() => {
+    if (!selectedMsg?.text) return;
+    setEditMsg(selectedMsg);
+  }, [selectedMsg]);
+
+  const handleDelete = useCallback(async () => {
+    if (!selectedMsg) return;
+    await deleteMessage(chatId, selectedMsg._key);
+  }, [selectedMsg, chatId]);
+
+  const handlePrivate = useCallback(() => {
+    if (!selectedMsg || !onOpenPrivate) return;
+    onOpenPrivate(selectedMsg.sender);
+  }, [selectedMsg, onOpenPrivate]);
+
+  const handleEditConfirm = useCallback(async (newText: string) => {
+    if (!editMsg) return;
+    await editMessage(chatId, editMsg._key, newText);
+    setEditMsg(null);
+  }, [editMsg, chatId]);
+
+  const handleForwardPick = useCallback(async (targetChatId: string) => {
+    if (!forwardMsg) return;
+    await forwardMessage(targetChatId, user, forwardMsg);
+    setForwardMsg(null);
+  }, [forwardMsg, user]);
+
   const handleThemeSelect = useCallback(async (t: ChatTheme | null) => {
     setChatThemeState(t);
     await setChatTheme(chatId, t);
@@ -462,51 +505,50 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: 
         </BlurView>
 
         {/* Pin bar */}
-        <BlurView intensity={40} tint="dark" style={styles.pinBarWrap}>
+        <View style={styles.pinBarWrap}>
           <PinBar pins={pins} onPress={handlePinPress} />
-        </BlurView>
+        </View>
 
-        {/* Messages */}
+        {/* Messages + reply bar (absolute поверх списка) */}
         <Animated.View style={[styles.listWrap, { opacity: listOpacity }]}>
-        <FlatList
-          ref={flatListRef}
-          data={reversedMessages}
-          keyExtractor={(item) => item._key}
-          renderItem={renderItem}
-          inverted
-          onScroll={(e) => {
-            isNearBottomRef.current = e.nativeEvent.contentOffset.y < 80;
-          }}
-          scrollEventThrottle={100}
-          onContentSizeChange={handleContentSizeChange}
-          maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-          style={styles.list}
-          contentContainerStyle={styles.listContent}
-          maxToRenderPerBatch={10}
-          windowSize={10}
-          initialNumToRender={20}
-          ListEmptyComponent={
-            <View style={styles.emptyWrap}>
-              <Text style={styles.emptyText}>Начните общение 👋</Text>
+          <FlatList
+            ref={flatListRef}
+            data={reversedMessages}
+            keyExtractor={(item) => item._key}
+            renderItem={renderItem}
+            inverted
+            onScroll={(e) => {
+              isNearBottomRef.current = e.nativeEvent.contentOffset.y < 80;
+            }}
+            scrollEventThrottle={100}
+            onContentSizeChange={handleContentSizeChange}
+            maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+            style={styles.list}
+            contentContainerStyle={[styles.listContent, replyTo ? { paddingBottom: 60 } : undefined]}
+            maxToRenderPerBatch={10}
+            windowSize={10}
+            initialNumToRender={20}
+            ListEmptyComponent={
+              <View style={styles.emptyWrap}>
+                <Text style={styles.emptyText}>Начните общение 👋</Text>
+              </View>
+            }
+          />
+          {replyTo && (
+            <View style={styles.replyBar}>
+              <View style={styles.replyBarIcon}>
+                <IconReplyBar size={18} color={theme.accent} />
+              </View>
+              <View style={styles.replyBarContent}>
+                <Text style={styles.replyBarAuthor} numberOfLines={1}>В ответ {replyTo.sender}</Text>
+                <Text style={styles.replyBarText} numberOfLines={1}>{replyTo.text || '📷'}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setReplyTo(null)} style={styles.replyBarClose}>
+                <IconClose size={16} color={theme.text2} />
+              </TouchableOpacity>
             </View>
-          }
-        />
+          )}
         </Animated.View>
-
-        {/* Reply bar */}
-
-        {replyTo && (
-          <View style={styles.replyBar}>
-            <View style={styles.replyBarLine} />
-            <View style={styles.replyBarBody}>
-              <Text style={styles.replyBarAuthor}>{replyTo.sender}</Text>
-              <Text style={styles.replyBarText} numberOfLines={1}>{replyTo.text || '📷'}</Text>
-            </View>
-            <TouchableOpacity onPress={() => setReplyTo(null)} style={styles.replyBarClose}>
-              <Text style={styles.replyBarX}>✕</Text>
-            </TouchableOpacity>
-          </View>
-        )}
 
         {/* Input bar — always rendered. TextInput stays mounted to keep keyboard open during recording. */}
         <View style={[styles.inb, { paddingBottom: inbBottomPad }]}>
@@ -592,7 +634,30 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: 
           onReact={handleReact}
           onReply={() => selectedMsg && handleReply(selectedMsg)}
           onPin={handlePin}
+          onCopy={selectedMsg?.text ? handleCopy : undefined}
+          onForward={handleForward}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          onPrivate={isGeneralChat && selectedMsg && selectedMsg.sender !== user ? handlePrivate : undefined}
           isMe={selectedMsg?.sender === user}
+          isPinned={!!(selectedMsg && pins.some(p => p.key === selectedMsg._key))}
+          canEdit={!!selectedMsg?.text}
+          canPrivate={!!(isGeneralChat && selectedMsg && selectedMsg.sender !== user && onOpenPrivate)}
+        />
+
+        <EditPanel
+          visible={!!editMsg}
+          initialText={editMsg?.text || ''}
+          onConfirm={handleEditConfirm}
+          onCancel={() => setEditMsg(null)}
+        />
+
+        <ForwardModal
+          visible={!!forwardMsg}
+          user={user}
+          excludeChatId={chatId}
+          onClose={() => setForwardMsg(null)}
+          onPick={handleForwardPick}
         />
 
         {themePickerOpen && (
@@ -625,7 +690,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: theme.border, overflow: 'hidden',
   },
   menuDots: { fontSize: 22, color: theme.text, lineHeight: 26 },
-  pinBarWrap: { overflow: 'hidden' },
+  pinBarWrap: { overflow: 'hidden', backgroundColor: 'rgba(15,12,41,0.82)' },
   headerBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 0 },
   headerAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
@@ -643,18 +708,20 @@ const styles = StyleSheet.create({
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60 },
   emptyText: { color: theme.text3, fontSize: 15 },
 
+  /* .rb — gap:8, padding:8 12, background:--bg2, border-top:--brd */
   replyBar: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(15,12,41,0.9)',
     paddingHorizontal: 12, paddingVertical: 8,
-    borderTopWidth: 1, borderTopColor: theme.border, gap: 8,
+    borderTopWidth: 1, borderTopColor: theme.border,
+    gap: 8,
+    backgroundColor: 'rgba(15,12,41,0.82)',
   },
-  replyBarLine: { width: 3, height: 36, backgroundColor: theme.accent, borderRadius: 2 },
-  replyBarBody: { flex: 1 },
-  replyBarAuthor: { fontSize: 13, color: theme.accent, fontWeight: '500', marginBottom: 1 },
-  replyBarText: { fontSize: 14, color: theme.text2 },
-  replyBarClose: { padding: 4 },
-  replyBarX: { color: theme.text3, fontSize: 16 },
+  replyBarIcon: { flexShrink: 0, alignItems: 'center', justifyContent: 'center' },
+  replyBarContent: { flex: 1, minWidth: 0 },
+  replyBarAuthor: { fontSize: 13, color: theme.accent, fontWeight: '700', marginBottom: 1 },
+  replyBarText: { fontSize: 13, color: theme.text2 },
+  replyBarClose: { padding: 4, flexShrink: 0 },
 
   /* inb — always-rendered input bar container */
   inb: {

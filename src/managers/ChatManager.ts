@@ -16,6 +16,7 @@ export type Message = {
   replyTo?: { sender: string; text: string };
   reactions?: Record<string, { user: string; emoji: string }>;
   edited?: boolean;
+  forwarded?: string;
   system?: boolean;
 };
 
@@ -145,6 +146,45 @@ export function listenPins(
     callback(pinInfos);
   });
   return () => off(r, 'value', handler);
+}
+
+export async function editMessage(
+  chatId: string,
+  msgKey: string,
+  newText: string,
+): Promise<void> {
+  const t = newText.trim();
+  if (!t) return;
+  await update(ref(db, `messages/${chatId}/${msgKey}`), { text: t, edited: true });
+  // Обновляем lastText если редактируем последнее сообщение
+  const lastSnap = await get(query(ref(db, 'messages/' + chatId), limitToLast(1)));
+  const lastData = lastSnap.val() || {};
+  const lastKey = Object.keys(lastData)[0];
+  if (lastKey === msgKey) {
+    await update(ref(db, 'chats/' + chatId), { lastText: t });
+  }
+}
+
+export async function deleteMessage(chatId: string, msgKey: string): Promise<void> {
+  const { remove } = await import('firebase/database');
+  await remove(ref(db, `messages/${chatId}/${msgKey}`));
+}
+
+export async function forwardMessage(
+  chatId: string,
+  sender: string,
+  original: Message,
+): Promise<void> {
+  const payload: any = { sender, ts: serverTimestamp(), forwarded: original.sender };
+  let preview = '';
+  if (original.text) { payload.text = original.text; preview = original.text; }
+  else if (original.image) { payload.image = original.image; preview = '📷 Фото'; }
+  else if (original.audio) { payload.audio = original.audio; payload.audioDur = original.audioDur; preview = '🎤 Голосовое'; }
+  else if (original.vidMsg) { payload.vidMsg = original.vidMsg; payload.vidDur = original.vidDur; preview = '🎥 Видео'; }
+  else if (original.sticker) { payload.sticker = original.sticker; preview = original.sticker; }
+  else if (original.animSticker) { payload.animSticker = original.animSticker; preview = '✨ Стикер'; }
+  await push(ref(db, 'messages/' + chatId), payload);
+  await update(ref(db, 'chats/' + chatId), { lastText: preview, lastTs: serverTimestamp() });
 }
 
 export async function togglePin(chatId: string, msgKey: string): Promise<void> {
