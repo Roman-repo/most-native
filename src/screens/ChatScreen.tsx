@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
   FlatList, KeyboardAvoidingView, Platform, Animated, Easing, Keyboard, Vibration, Alert,
@@ -47,9 +47,10 @@ function getAvatarColor(name: string): string {
   return AVATAR_COLORS[h];
 }
 
+
 export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: Props) {
   const insets = useSafeAreaInsets();
-  const inbBottomPad = Math.max(insets.bottom, Platform.OS === 'android' ? 16 : 28);
+  const inbBottomPad = Platform.OS === 'android' ? 6 : Math.max(insets.bottom, 20);
   // — Chat state —
   const [messages, setMessages] = useState<Message[]>([]);
   const [pins, setPins] = useState<PinInfo[]>([]);
@@ -61,7 +62,10 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: 
   const [chatTheme, setChatThemeState] = useState<ChatTheme | null>(null);
   const [themePickerOpen, setThemePickerOpen] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+  const isNearBottomRef = useRef(true);
   const pinIndexRef = useRef(0);
+  const listOpacity = useRef(new Animated.Value(0)).current;
+  const initialLoadRef = useRef(false);
 
   // — Recording mode: audio | video (tap mic to toggle) —
   const [recordMode, setRecordMode] = useState<'audio' | 'video'>('audio');
@@ -101,17 +105,33 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: 
   }, [recState.metering, recording]);
 
   useEffect(() => {
-    const unsubMsgs = listenMessages(chatId, setMessages);
+    const unsubMsgs = listenMessages(chatId, (newMessages) => {
+      setMessages(newMessages);
+    });
     const unsubPins = listenPins(chatId, setPins);
     getChatTheme(chatId).then(setChatThemeState);
     return () => { unsubMsgs(); unsubPins(); };
   }, [chatId]);
 
   useEffect(() => {
-    if (messages.length > 0) {
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+    if (messages.length === 0) return;
+    if (!initialLoadRef.current) {
+      initialLoadRef.current = true;
+      Animated.timing(listOpacity, {
+        toValue: 1, duration: 250, useNativeDriver: true,
+      }).start();
     }
   }, [messages.length]);
+
+  const prevCountRef = useRef(0);
+  const handleContentSizeChange = useCallback(() => {
+    const count = messages.length;
+    if (count > prevCountRef.current && prevCountRef.current > 0 && isNearBottomRef.current) {
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    }
+    prevCountRef.current = count;
+  }, [messages.length]);
+
 
   const openEmoji = useCallback(() => {
     if (emojiAnimating.current) return;
@@ -310,26 +330,35 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: 
     await setChatTheme(chatId, t);
   }, [chatId]);
 
-  const renderItem = useCallback(({ item, index }: { item: Message; index: number }) => {
-    const isGeneral = chatId === 'general';
-    const prev = index > 0 ? messages[index - 1] : null;
-    const showSender = (isGroup || isGeneral) && (!prev || prev.sender !== item.sender);
-    return (
-      <MessageBubble
-        message={item}
-        isMe={item.sender === user}
-        showSender={showSender}
-        onLongPress={handleLongPress}
-        onReactionPress={handleReactionPress}
-        onReply={handleReply}
-        bubbleColor={chatTheme?.acc}
-      />
-    );
-  }, [messages, isGroup, chatId, user, handleLongPress, handleReactionPress, handleReply, chatTheme]);
+  const isGeneralChat = chatId === 'general';
 
-  const isGeneral = chatId === 'general';
-  const avatarBg = isGeneral ? theme.accent : isGroup ? '#00B894' : getAvatarColor(chatName);
-  const avatarChar = isGeneral ? '💬' : isGroup ? '👥' : chatName.charAt(0).toUpperCase();
+  // Reversed array для inverted FlatList — сохраняем оригинальные ссылки на объекты
+  const reversedMessages = useMemo(() => [...messages].reverse(), [messages]);
+
+  // showSender вычисляем отдельно, не встраивая в объекты сообщений
+  const showSenderMap = useMemo(() => {
+    const map = new Map<string, boolean>();
+    messages.forEach((item, index) => {
+      map.set(item._key, (isGroup || isGeneralChat) && (index === 0 || messages[index - 1].sender !== item.sender));
+    });
+    return map;
+  }, [messages, isGroup, isGeneralChat]);
+
+  const renderItem = useCallback(({ item, index }: { item: Message; index: number }) => (
+    <MessageBubble
+      message={item}
+      isMe={item.sender === user}
+      showSender={showSenderMap.get(item._key) ?? false}
+      onLongPress={handleLongPress}
+      onReactionPress={handleReactionPress}
+      onReply={handleReply}
+      bubbleColor={chatTheme?.acc}
+    />
+  ), [user, showSenderMap, handleLongPress, handleReactionPress, handleReply, chatTheme]);
+
+
+  const avatarBg = isGeneralChat ? theme.accent : isGroup ? '#00B894' : getAvatarColor(chatName);
+  const avatarChar = isGeneralChat ? '💬' : isGroup ? '👥' : chatName.charAt(0).toUpperCase();
   const hasText = text.trim().length > 0;
   const accentColor = chatTheme?.acc ?? theme.accent;
 
@@ -341,7 +370,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: 
     <GestureHandlerRootView style={[styles.container, chatTheme && { backgroundColor: '#0a0a1a' }]}>
       <KeyboardAvoidingView
         style={styles.content}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={0}
       >
         {/* Header */}
@@ -355,7 +384,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: 
             </View>
             <View style={styles.headerInfo}>
               <Text style={styles.headerTitle} numberOfLines={1}>{chatName}</Text>
-              <Text style={styles.headerSub}>{isGeneral || isGroup ? 'групповой чат' : 'личный чат'}</Text>
+              <Text style={styles.headerSub}>{isGeneralChat || isGroup ? 'групповой чат' : 'личный чат'}</Text>
             </View>
           </TouchableOpacity>
           <TouchableOpacity style={styles.headerBtn} activeOpacity={0.6} onPress={() => setThemePickerOpen(v => !v)}>
@@ -369,22 +398,34 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: 
         </BlurView>
 
         {/* Messages */}
+        <Animated.View style={[styles.listWrap, { opacity: listOpacity }]}>
         <FlatList
           ref={flatListRef}
-          data={messages}
+          data={reversedMessages}
           keyExtractor={(item) => item._key}
           renderItem={renderItem}
+          inverted
+          onScroll={(e) => {
+            isNearBottomRef.current = e.nativeEvent.contentOffset.y < 80;
+          }}
+          scrollEventThrottle={100}
+          onContentSizeChange={handleContentSizeChange}
+          maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
           style={styles.list}
           contentContainerStyle={styles.listContent}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+          maxToRenderPerBatch={10}
+          windowSize={10}
+          initialNumToRender={20}
           ListEmptyComponent={
             <View style={styles.emptyWrap}>
               <Text style={styles.emptyText}>Начните общение 👋</Text>
             </View>
           }
         />
+        </Animated.View>
 
         {/* Reply bar */}
+
         {replyTo && (
           <View style={styles.replyBar}>
             <View style={styles.replyBarLine} />
@@ -468,7 +509,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: 
         </View>
 
         {/* Emoji panel */}
-        <Animated.View style={{ height: emojiHeight }}>
+        <Animated.View style={{ height: emojiHeight, overflow: 'hidden' }}>
           <EmojiPanel
             onEmoji={(e) => setText(t => t + e)}
             onSticker={(s) => { closeEmoji(); sendSticker(chatId, user, s); }}
@@ -524,6 +565,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 17, fontWeight: '600', color: theme.text },
   headerSub: { fontSize: 13, color: theme.text2, marginTop: 1 },
 
+  listWrap: { flex: 1 },
   list: { flex: 1 },
   listContent: { paddingVertical: 12, gap: 3 },
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60 },

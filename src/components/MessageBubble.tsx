@@ -1,7 +1,7 @@
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback, useEffect, memo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Image } from 'react-native';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
-import { Video, ResizeMode } from 'expo-av';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import { IconPlay, IconPause } from './Icons';
 import { base64ToTempFile } from '../managers/MediaManager';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
@@ -115,7 +115,16 @@ const VID_SIZE = 200;
 function VideoBubble({ url, duration, msgKey }: { url: string; duration: string; msgKey: string }) {
   const [resolvedUri, setResolvedUri] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
-  const videoRef = useRef<Video>(null);
+
+  const player = useVideoPlayer(resolvedUri ? { uri: resolvedUri } : null);
+
+  useEffect(() => {
+    const sub = player.addListener('playToEnd', () => {
+      player.currentTime = 0;
+      setPlaying(false);
+    });
+    return () => sub.remove();
+  }, [player]);
 
   useEffect(() => {
     if (!url) return;
@@ -128,37 +137,39 @@ function VideoBubble({ url, duration, msgKey }: { url: string; duration: string;
     }
   }, [url, msgKey]);
 
-  const toggle = useCallback(async () => {
-    if (!videoRef.current) return;
+  const toggle = useCallback(() => {
+    if (!resolvedUri) return;
     if (playing) {
-      await videoRef.current.pauseAsync();
+      player.pause();
+      setPlaying(false);
     } else {
-      await videoRef.current.playAsync();
+      player.play();
+      setPlaying(true);
     }
-    setPlaying(p => !p);
-  }, [playing]);
+  }, [playing, resolvedUri, player]);
 
   return (
     <TouchableOpacity onPress={toggle} activeOpacity={0.9} style={styles.vidWrap}>
       {resolvedUri ? (
-        <Video
-          ref={videoRef}
-          source={{ uri: resolvedUri }}
+        <VideoView
+          player={player}
           style={styles.vidCircle}
-          resizeMode={ResizeMode.COVER}
-          isLooping
-          onPlaybackStatusUpdate={s => {
-            if (s.isLoaded && s.didJustFinish) setPlaying(false);
-          }}
+          contentFit="cover"
+          nativeControls={false}
         />
       ) : (
         <View style={[styles.vidCircle, { backgroundColor: '#111' }]} />
       )}
-      {!playing && (
-        <View style={styles.vidPlay}>
+      <View style={styles.vidPlay}>
+        {playing ? (
+          <View style={styles.vidPauseIcon}>
+            <View style={styles.vidPauseBar} />
+            <View style={styles.vidPauseBar} />
+          </View>
+        ) : (
           <Text style={styles.vidPlayIcon}>▶</Text>
-        </View>
-      )}
+        )}
+      </View>
       {duration ? (
         <View style={styles.vidDurBadge}>
           <Text style={styles.vidDurText}>{duration}</Text>
@@ -168,9 +179,23 @@ function VideoBubble({ url, duration, msgKey }: { url: string; duration: string;
   );
 }
 
-export default function MessageBubble({ message: m, isMe, showSender, onLongPress, onReactionPress, onReply, bubbleColor }: Props) {
+const MessageBubble = memo(function MessageBubble({ message: m, isMe, showSender, onLongPress, onReactionPress, onReply, bubbleColor }: Props) {
   const translateX = useRef(new Animated.Value(0)).current;
   const replyOpacity = useRef(new Animated.Value(0)).current;
+
+  const isRecent = Boolean(m.ts && (Date.now() - m.ts) < 3000);
+  const entryOpacity = useRef(new Animated.Value(isRecent ? 0.5 : 1)).current;
+  const entryTranslateY = useRef(new Animated.Value(isRecent ? 12 : 0)).current;
+  const entryScale = useRef(new Animated.Value(isRecent ? 0.97 : 1)).current;
+
+  useEffect(() => {
+    if (!isRecent) return;
+    Animated.parallel([
+      Animated.timing(entryOpacity, { toValue: 1, duration: 350, useNativeDriver: true }),
+      Animated.timing(entryTranslateY, { toValue: 0, duration: 350, useNativeDriver: true }),
+      Animated.timing(entryScale, { toValue: 1, duration: 350, useNativeDriver: true }),
+    ]).start();
+  }, []);
 
   const reactionMap: Record<string, number> = {};
   if (m.reactions) {
@@ -210,6 +235,7 @@ export default function MessageBubble({ message: m, isMe, showSender, onLongPres
   });
 
   return (
+    <Animated.View style={{ opacity: entryOpacity, transform: [{ translateY: entryTranslateY }, { scale: entryScale }] }}>
     <PanGestureHandler
       onGestureEvent={onGestureEvent}
       onHandlerStateChange={onHandlerStateChange}
@@ -266,23 +292,37 @@ export default function MessageBubble({ message: m, isMe, showSender, onLongPres
                 </View>
               </View>
             )}
-            {!m.sticker && !m.animSticker && !m.image && !m.audio && <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther, isMe && bubbleColor ? { backgroundColor: bubbleColor, shadowColor: bubbleColor } : undefined]}>
-              {m.replyTo && (
-                <View style={styles.replyQuote}>
-                  <View style={styles.replyLine} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.replyAuthor}>{m.replyTo.sender}</Text>
-                    <Text style={styles.replyText} numberOfLines={1}>{m.replyTo.text || 'медиа'}</Text>
+            {!m.sticker && !m.animSticker && !m.image && !m.audio && !m.vidMsg && (() => {
+              const timeStr = formatTime(m.ts);
+              const editedPrefix = m.edited ? 'изм. ' : '';
+              const checkSuffix = isMe ? ' ✓' : '';
+              const spacerChars = Math.ceil((editedPrefix.length + timeStr.length + checkSuffix.length) * 1.4) + 3;
+              const spacer = '\u00A0'.repeat(spacerChars);
+              return (
+                <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther, isMe && bubbleColor ? { backgroundColor: bubbleColor, shadowColor: bubbleColor } : undefined]}>
+                  {m.replyTo && (
+                    <View style={styles.replyQuote}>
+                      <View style={styles.replyLine} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.replyAuthor}>{m.replyTo.sender}</Text>
+                        <Text style={styles.replyText} numberOfLines={1}>{m.replyTo.text || 'медиа'}</Text>
+                      </View>
+                    </View>
+                  )}
+                  {m.text ? (
+                    <Text style={styles.text}>
+                      {m.text}
+                      <Text style={styles.timeSpacer}>{spacer}</Text>
+                    </Text>
+                  ) : null}
+                  <View style={styles.timeInline} pointerEvents="none">
+                    {m.edited && <Text style={styles.edited}>изм. </Text>}
+                    <Text style={[styles.time, isMe ? styles.timeMe : styles.timeOther]}>{timeStr}</Text>
+                    {isMe && <Text style={[styles.check, isMe ? styles.timeMe : styles.timeOther]}>{' ✓'}</Text>}
                   </View>
                 </View>
-              )}
-              {m.text ? <Text style={styles.text}>{m.text}</Text> : null}
-              <View style={styles.meta}>
-                {m.edited && <Text style={styles.edited}>изм. </Text>}
-                <Text style={[styles.time, isMe ? styles.timeMe : styles.timeOther]}>{formatTime(m.ts)}</Text>
-                {isMe && <Text style={styles.check}>✓</Text>}
-              </View>
-            </View>}
+              );
+            })()}
             {reactionEntries.length > 0 && (
               <View style={[styles.reactions, isMe ? styles.reactionsMe : styles.reactionsOther]}>
                 {reactionEntries.map(([emoji, count]) => (
@@ -297,8 +337,23 @@ export default function MessageBubble({ message: m, isMe, showSender, onLongPres
         </Animated.View>
       </Animated.View>
     </PanGestureHandler>
+    </Animated.View>
   );
-}
+}, (prev, next) =>
+  prev.message._key === next.message._key &&
+  prev.message.text === next.message.text &&
+  prev.message.edited === next.message.edited &&
+  prev.message.audio === next.message.audio &&
+  prev.message.image === next.message.image &&
+  prev.message.vidMsg === next.message.vidMsg &&
+  prev.message.sticker === next.message.sticker &&
+  JSON.stringify(prev.message.reactions) === JSON.stringify(next.message.reactions) &&
+  prev.isMe === next.isMe &&
+  prev.showSender === next.showSender &&
+  prev.bubbleColor === next.bubbleColor
+);
+
+export default MessageBubble;
 
 const styles = StyleSheet.create({
   row: { paddingHorizontal: 16, paddingVertical: 1.5, maxWidth: '85%' },
@@ -359,6 +414,8 @@ const styles = StyleSheet.create({
   text: { fontSize: 16, lineHeight: 20.8, color: '#ffffff' },
 
   meta: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', marginTop: 3, gap: 2 },
+  timeInline: { position: 'absolute', right: 10, bottom: 6, flexDirection: 'row', alignItems: 'center' },
+  timeSpacer: { fontSize: 16, color: 'transparent' },
   edited: { fontSize: 11, color: 'rgba(255,255,255,0.5)' },
   timeMe: { color: 'rgba(255,255,255,0.85)' },
   timeOther: { color: 'rgba(255,255,255,0.5)' },
@@ -396,6 +453,8 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   vidPlayIcon: { color: '#fff', fontSize: 18, marginLeft: 3 },
+  vidPauseIcon: { flexDirection: 'row', gap: 4, alignItems: 'center', justifyContent: 'center' },
+  vidPauseBar: { width: 4, height: 16, borderRadius: 2, backgroundColor: '#fff' },
   vidDurBadge: {
     position: 'absolute', bottom: 12, right: 12,
     backgroundColor: 'rgba(0,0,0,0.6)',

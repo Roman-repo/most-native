@@ -14,7 +14,7 @@ const MAX_SEC = 30;
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 type Props = {
-  onSend: (uri: string, duration: number) => void;
+  onSend: (uri: string, duration: number) => Promise<void>;
   onCancel: () => void;
 };
 
@@ -23,6 +23,7 @@ export default function VideoRecorder({ onSend, onCancel }: Props) {
   const [micPerm, requestMicPerm] = useMicrophonePermissions();
   const cameraRef = useRef<CameraView>(null);
   const [cameraReady, setCameraReady] = useState(false);
+  const [sending, setSending] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const progressAnim = useRef(new Animated.Value(0)).current;
@@ -48,7 +49,8 @@ export default function VideoRecorder({ onSend, onCancel }: Props) {
         console.warn('[VideoRecorder] recordAsync returned no uri, result:', result);
         onCancel();
       } else {
-        onSend(result.uri, durationRef.current);
+        setSending(true);
+        await onSend(result.uri, durationRef.current);
       }
     } catch (e) {
       console.error('[VideoRecorder] record error:', e);
@@ -133,12 +135,18 @@ export default function VideoRecorder({ onSend, onCancel }: Props) {
       <Text style={styles.timer}>{timerLabel}</Text>
 
       <View style={styles.controls}>
-        <TouchableOpacity onPress={handleCancel} style={styles.cancelBtn} activeOpacity={0.7} delayPressIn={0}>
-          <Text style={styles.cancelText}>ОТМЕНА</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={handleSend} style={styles.sendBtn} activeOpacity={0.8} delayPressIn={0}>
-          <IconSend size={22} color="#fff" />
-        </TouchableOpacity>
+        {sending ? (
+          <Text style={styles.sendingText}>Отправка...</Text>
+        ) : (
+          <>
+            <TouchableOpacity onPress={handleCancel} style={styles.cancelBtn} activeOpacity={0.7} delayPressIn={0}>
+              <Text style={styles.cancelText}>ОТМЕНА</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleSend} style={styles.sendBtn} activeOpacity={0.8} delayPressIn={0}>
+              <IconSend size={22} color="#fff" />
+            </TouchableOpacity>
+          </>
+        )}
       </View>
     </View>
   );
@@ -183,6 +191,7 @@ const styles = StyleSheet.create({
   },
   cancelBtn: { paddingHorizontal: 8, paddingVertical: 8 },
   cancelText: { color: theme.accent, fontSize: 15, fontWeight: '500', letterSpacing: 0.5 },
+  sendingText: { color: 'rgba(255,255,255,0.7)', fontSize: 15, fontWeight: '500', letterSpacing: 0.5 },
   sendBtn: {
     width: 64, height: 64, borderRadius: 32,
     backgroundColor: theme.accent,
