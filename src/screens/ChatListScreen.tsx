@@ -8,6 +8,7 @@ import { db } from '../services/firebase';
 import { ref, onValue, off } from 'firebase/database';
 import { theme } from '../styles/theme';
 import { listenUserPresence } from '../services/presence';
+import { listenTyping } from '../services/typing';
 
 type Chat = {
   id: string;
@@ -94,6 +95,18 @@ export default function ChatListScreen({ user, onOpenChat, onOpenDrawer }: Props
     return () => { unsubs.forEach(fn => fn()); };
   }, [otherUsers.join('|')]);
 
+  const [typingMap, setTypingMap] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    if (chats.length === 0) return;
+    const unsubs = chats.map(c =>
+      listenTyping(c.id, user, (ts) => {
+        const has = ts.length > 0;
+        setTypingMap(prev => prev[c.id] === has ? prev : { ...prev, [c.id]: has });
+      })
+    );
+    return () => { unsubs.forEach(fn => fn()); };
+  }, [chats.map(c => c.id).join('|'), user]);
+
   function formatTime(ts: number): string {
     if (!ts) return '';
     const d = new Date(ts);
@@ -165,7 +178,11 @@ export default function ChatListScreen({ user, onOpenChat, onOpenDrawer }: Props
                 <Text style={styles.chatName} numberOfLines={1}>{item.name}</Text>
                 <Text style={styles.chatTime}>{formatTime(item.lastTs)}</Text>
               </View>
-              <Text style={styles.chatPreview} numberOfLines={1}>{item.lastText || 'Нет сообщений'}</Text>
+              {typingMap[item.id] ? (
+                <Text style={[styles.chatPreview, styles.chatPreviewTyping]} numberOfLines={1}>печатает...</Text>
+              ) : (
+                <Text style={styles.chatPreview} numberOfLines={1}>{item.lastText || 'Нет сообщений'}</Text>
+              )}
             </View>
           </TouchableOpacity>
         )}
@@ -226,6 +243,7 @@ const styles = StyleSheet.create({
   chatName: { fontSize: 16, fontWeight: '500', color: theme.text, flex: 1, marginRight: 8 },
   chatTime: { fontSize: 12, color: theme.text3, flexShrink: 0 },
   chatPreview: { fontSize: 14, color: theme.text3 },
+  chatPreviewTyping: { color: '#4CAF50', fontStyle: 'italic' },
 
   separator: { height: 1, backgroundColor: theme.border, marginLeft: 80 },
   empty: { textAlign: 'center', color: theme.text3, marginTop: 60, fontSize: 15 },

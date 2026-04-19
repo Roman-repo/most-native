@@ -24,6 +24,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { fileToBase64 } from '../managers/MediaManager';
 import * as FileSystem from 'expo-file-system/legacy';
 import { listenUserPresence, formatLastSeen, type PresenceState } from '../services/presence';
+import { setTyping, stopTyping, listenTyping, formatTypingText } from '../services/typing';
+import TypingDots from '../components/TypingDots';
 import {
   listenMessages, sendMessage, sendAudio, sendSticker, sendAnimSticker,
   toggleReaction, listenPins, togglePin,
@@ -295,6 +297,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: 
     const t = text.trim();
     if (!t) return;
     setText('');
+    stopTyping(chatId, user);
     const reply = replyTo;
     setReplyTo(null);
     await sendMessage(chatId, user, t, reply ?? undefined);
@@ -350,6 +353,23 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: 
     return unsub;
   }, [chatName, isGeneralChat, isGroup]);
 
+  const [typers, setTypers] = useState<string[]>([]);
+  useEffect(() => {
+    if (!chatId || !user) return;
+    const unsub = listenTyping(chatId, user, setTypers);
+    return unsub;
+  }, [chatId, user]);
+
+  useEffect(() => {
+    return () => { stopTyping(chatId, user); };
+  }, [chatId, user]);
+
+  const handleChangeText = useCallback((t: string) => {
+    setText(t);
+    if (t.length > 0) setTyping(chatId, user);
+    else stopTyping(chatId, user);
+  }, [chatId, user]);
+
   // Reversed array для inverted FlatList — сохраняем оригинальные ссылки на объекты
   const reversedMessages = useMemo(() => [...messages].reverse(), [messages]);
 
@@ -402,13 +422,24 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: 
             </View>
             <View style={styles.headerInfo}>
               <Text style={styles.headerTitle} numberOfLines={1}>{chatName}</Text>
-              <Text style={[styles.headerSub, !isGeneralChat && !isGroup && otherPresence?.online && styles.headerSubOnline]}>
-                {isGeneralChat || isGroup
-                  ? 'групповой чат'
-                  : otherPresence?.online
-                    ? 'онлайн'
-                    : formatLastSeen(otherPresence?.lastSeenTs ?? null)}
-              </Text>
+              {typers.length > 0 ? (
+                <View style={styles.headerSubRow}>
+                  <Text style={[styles.headerSub, styles.headerSubTyping]} numberOfLines={1}>
+                    {isGeneralChat || isGroup
+                      ? formatTypingText(typers, true)
+                      : 'печатает'}
+                  </Text>
+                  <TypingDots color="#4CAF50" />
+                </View>
+              ) : (
+                <Text style={[styles.headerSub, !isGeneralChat && !isGroup && otherPresence?.online && styles.headerSubOnline]}>
+                  {isGeneralChat || isGroup
+                    ? 'групповой чат'
+                    : otherPresence?.online
+                      ? 'онлайн'
+                      : formatLastSeen(otherPresence?.lastSeenTs ?? null)}
+                </Text>
+              )}
             </View>
           </TouchableOpacity>
           <TouchableOpacity style={styles.headerBtn} activeOpacity={0.6} onPress={() => setThemePickerOpen(v => !v)}>
@@ -476,7 +507,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: 
                 placeholder="Сообщение"
                 placeholderTextColor={theme.text3}
                 value={text}
-                onChangeText={setText}
+                onChangeText={handleChangeText}
                 multiline
                 onSubmitEditing={handleSend}
               />
@@ -589,6 +620,8 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 17, fontWeight: '600', color: theme.text },
   headerSub: { fontSize: 13, color: theme.text2, marginTop: 1 },
   headerSubOnline: { color: '#4CAF50' },
+  headerSubRow: { flexDirection: 'row', alignItems: 'center', marginTop: 1 },
+  headerSubTyping: { color: '#4CAF50', marginTop: 0 },
 
   listWrap: { flex: 1 },
   list: { flex: 1 },
