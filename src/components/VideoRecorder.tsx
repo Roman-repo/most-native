@@ -9,7 +9,9 @@ const SIZE = 240;
 const STROKE = 6;
 const RADIUS = (SIZE - STROKE) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
-const MAX_SEC = 30;
+const MAX_SEC = 15;
+const MAX_FILE_BYTES = 7 * 1024 * 1024;
+const VIDEO_BITRATE = 800_000;
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -42,7 +44,12 @@ export default function VideoRecorder({ onSend, onCancel }: Props) {
     if (recordingStartedRef.current) return;
     recordingStartedRef.current = true;
     try {
-      const result = await (cameraRef.current as any).recordAsync({ maxDuration: MAX_SEC, quality: '480p' });
+      const result = await (cameraRef.current as any).recordAsync({
+        maxDuration: MAX_SEC,
+        quality: '480p',
+        maxFileSize: MAX_FILE_BYTES,
+        videoBitrate: VIDEO_BITRATE,
+      });
       if (isCancelRef.current) {
         onCancel();
       } else if (!result?.uri) {

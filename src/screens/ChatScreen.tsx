@@ -22,6 +22,7 @@ import EmojiPanel from '../components/EmojiPanel';
 import { getChatTheme, setChatTheme, type ChatTheme } from '../utils/chatThemes';
 import * as ImagePicker from 'expo-image-picker';
 import { fileToBase64 } from '../managers/MediaManager';
+import * as FileSystem from 'expo-file-system/legacy';
 import {
   listenMessages, sendMessage, sendAudio, sendSticker, sendAnimSticker,
   toggleReaction, listenPins, togglePin,
@@ -241,7 +242,17 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: 
 
   // — Send video —
   const handleSendVideo = useCallback(async (uri: string, duration: number) => {
+    const MAX_BASE64_BYTES = 9 * 1024 * 1024; // 9 MB в base64 (лимит RTDB = 10 MB)
+    const MAX_BINARY_BYTES = Math.floor(MAX_BASE64_BYTES * 0.75); // base64 раздувает на 33%
     try {
+      const info = await FileSystem.getInfoAsync(uri, { size: true });
+      if (info.exists && typeof info.size === 'number' && info.size > MAX_BINARY_BYTES) {
+        Alert.alert(
+          'Видео слишком большое',
+          `Размер ${(info.size / 1024 / 1024).toFixed(1)} МБ. Максимум — ${(MAX_BINARY_BYTES / 1024 / 1024).toFixed(0)} МБ. Запишите видео короче.`,
+        );
+        return;
+      }
       const dataUrl = await fileToBase64(uri, 'video/mp4');
       await sendVideoMsg(chatId, user, dataUrl, duration);
     } catch (e) {
