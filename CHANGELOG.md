@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## v4.2.0 (2026-04-19) — Online-статус и last seen
+
+**Фича:** показываем, в сети ли собеседник, либо когда он был последний раз. Портировано из веб-версии.
+
+**Что сделано:**
+- Новый сервис `src/services/presence.ts`:
+  - `startPresence(user)` — пишет в `/online/<user>` heartbeat раз в 15 сек, `onDisconnect().remove()`, слушает AppState (свернули → offline, вернули → online).
+  - `listenUserPresence(user, cb)` — online = `(now - ts) < 45 сек`, lastSeen из `/lastSeen/<user>`.
+  - `formatLastSeen(ts)` — «только что» / «N мин назад» / «сегодня в HH:MM» / «вчера в HH:MM» / «DD месяц в HH:MM».
+- `App.tsx`: запуск presence по `useEffect([user])`, cleanup при логауте.
+- `ChatListScreen.tsx`: зелёная точка 13×13 в правом нижнем углу аватара приватных чатов.
+- `ChatScreen.tsx`: в хедере вместо «личный чат» — «онлайн» (зелёный) или «был(а) X». Для группового/общего чата текст прежний.
+
+**Не проверено пользователем** (требует 2 устройства/аккаунта) — отложено в бэклог на последующую приёмку.
+
 ## v4.1.1 (2026-04-19) — Фикс размера видеокружка
 
 **Баг:** отправка видеокружка падала с ошибкой `value argument contains a string greater than 10485760 utf8 bytes` — Firebase RTDB запрещает значения property больше 10 МБ, а base64-видео их превышало.

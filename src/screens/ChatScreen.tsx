@@ -23,6 +23,7 @@ import { getChatTheme, setChatTheme, type ChatTheme } from '../utils/chatThemes'
 import * as ImagePicker from 'expo-image-picker';
 import { fileToBase64 } from '../managers/MediaManager';
 import * as FileSystem from 'expo-file-system/legacy';
+import { listenUserPresence, formatLastSeen, type PresenceState } from '../services/presence';
 import {
   listenMessages, sendMessage, sendAudio, sendSticker, sendAnimSticker,
   toggleReaction, listenPins, togglePin,
@@ -342,6 +343,12 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: 
   }, [chatId]);
 
   const isGeneralChat = chatId === 'general';
+  const [otherPresence, setOtherPresence] = useState<PresenceState | null>(null);
+  useEffect(() => {
+    if (isGeneralChat || isGroup || !chatName) return;
+    const unsub = listenUserPresence(chatName, setOtherPresence);
+    return unsub;
+  }, [chatName, isGeneralChat, isGroup]);
 
   // Reversed array для inverted FlatList — сохраняем оригинальные ссылки на объекты
   const reversedMessages = useMemo(() => [...messages].reverse(), [messages]);
@@ -395,7 +402,13 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack }: 
             </View>
             <View style={styles.headerInfo}>
               <Text style={styles.headerTitle} numberOfLines={1}>{chatName}</Text>
-              <Text style={styles.headerSub}>{isGeneralChat || isGroup ? 'групповой чат' : 'личный чат'}</Text>
+              <Text style={[styles.headerSub, !isGeneralChat && !isGroup && otherPresence?.online && styles.headerSubOnline]}>
+                {isGeneralChat || isGroup
+                  ? 'групповой чат'
+                  : otherPresence?.online
+                    ? 'онлайн'
+                    : formatLastSeen(otherPresence?.lastSeenTs ?? null)}
+              </Text>
             </View>
           </TouchableOpacity>
           <TouchableOpacity style={styles.headerBtn} activeOpacity={0.6} onPress={() => setThemePickerOpen(v => !v)}>
@@ -575,6 +588,7 @@ const styles = StyleSheet.create({
   headerInfo: { flex: 1, minWidth: 0 },
   headerTitle: { fontSize: 17, fontWeight: '600', color: theme.text },
   headerSub: { fontSize: 13, color: theme.text2, marginTop: 1 },
+  headerSubOnline: { color: '#4CAF50' },
 
   listWrap: { flex: 1 },
   list: { flex: 1 },
