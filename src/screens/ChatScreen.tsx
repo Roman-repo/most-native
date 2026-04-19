@@ -13,12 +13,11 @@ import {
 import { theme } from '../styles/theme';
 import MessageBubble from '../components/MessageBubble';
 import ReactionPicker from '../components/ReactionPicker';
-import EditPanel from '../components/EditPanel';
 import ForwardModal from '../components/ForwardModal';
 import PinBar from '../components/PinBar';
 import ThemePicker from '../components/ThemePicker';
 import * as Clipboard from 'expo-clipboard';
-import { IconBack, IconSmile, IconPaperclip, IconMic, IconSend, IconVideoNote, IconReplyBar, IconClose } from '../components/Icons';
+import { IconBack, IconSmile, IconPaperclip, IconMic, IconSend, IconVideoNote, IconReplyBar, IconClose, IconCtxEdit, IconCheck } from '../components/Icons';
 import VideoRecorder from '../components/VideoRecorder';
 import { sendVideoMsg, editMessage, deleteMessage, forwardMessage } from '../managers/ChatManager';
 import EmojiPanel from '../components/EmojiPanel';
@@ -91,6 +90,9 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
   const urlRef = useRef<string | null>(null);
   const dotAnim = useRef(new Animated.Value(1)).current;
   const dotLoopRef = useRef<Animated.CompositeAnimation | null>(null);
+
+  // — Edit mode: saves text that was in input before edit started —
+  const prevTextRef = useRef('');
 
   // — Mic hold logic —
   const micHoldTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -359,8 +361,13 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
 
   const handleEdit = useCallback(() => {
     if (!selectedMsg?.text) return;
-    setEditMsg(selectedMsg);
-  }, [selectedMsg]);
+    const msg = selectedMsg;
+    prevTextRef.current = text;
+    setTimeout(() => {
+      setEditMsg(msg);
+      setText(msg.text ?? '');
+    }, 220);
+  }, [selectedMsg, text]);
 
   const handleDelete = useCallback(async () => {
     if (!selectedMsg) return;
@@ -372,11 +379,21 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
     onOpenPrivate(selectedMsg.sender);
   }, [selectedMsg, onOpenPrivate]);
 
-  const handleEditConfirm = useCallback(async (newText: string) => {
+  const handleEditSubmit = useCallback(async () => {
     if (!editMsg) return;
-    await editMessage(chatId, editMsg._key, newText);
+    const t = text.trim();
+    if (!t) return;
+    const msg = editMsg;
     setEditMsg(null);
-  }, [editMsg, chatId]);
+    setText('');
+    await editMessage(chatId, msg._key, t);
+  }, [editMsg, text, chatId]);
+
+  const handleEditCancel = useCallback(() => {
+    setText(prevTextRef.current);
+    prevTextRef.current = '';
+    setEditMsg(null);
+  }, []);
 
   const handleForwardPick = useCallback(async (targetChatId: string) => {
     if (!forwardMsg) return;
@@ -534,21 +551,35 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
               </View>
             }
           />
-          {replyTo && (
-            <View style={styles.replyBar}>
-              <View style={styles.replyBarIcon}>
-                <IconReplyBar size={18} color={theme.accent} />
-              </View>
-              <View style={styles.replyBarContent}>
-                <Text style={styles.replyBarAuthor} numberOfLines={1}>В ответ {replyTo.sender}</Text>
-                <Text style={styles.replyBarText} numberOfLines={1}>{replyTo.text || '📷'}</Text>
-              </View>
-              <TouchableOpacity onPress={() => setReplyTo(null)} style={styles.replyBarClose}>
-                <IconClose size={16} color={theme.text2} />
-              </TouchableOpacity>
-            </View>
-          )}
         </Animated.View>
+
+        {editMsg && (
+          <View style={styles.editBar}>
+            <IconCtxEdit size={28} color={theme.accent} />
+            <View style={styles.editBarContent}>
+              <Text style={styles.editBarLabel}>Редактирование</Text>
+              <Text style={styles.editBarMedia}>Нажмите, чтобы загрузить медиа</Text>
+            </View>
+            <TouchableOpacity onPress={handleEditCancel} style={styles.editBarClose}>
+              <IconClose size={16} color={theme.text2} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {replyTo && (
+          <View style={styles.replyBar}>
+            <View style={styles.replyBarIcon}>
+              <IconReplyBar size={18} color={theme.accent} />
+            </View>
+            <View style={styles.replyBarContent}>
+              <Text style={styles.replyBarAuthor} numberOfLines={1}>В ответ {replyTo.sender}</Text>
+              <Text style={styles.replyBarText} numberOfLines={1}>{replyTo.text || '📷'}</Text>
+            </View>
+            <TouchableOpacity onPress={() => setReplyTo(null)} style={styles.replyBarClose}>
+              <IconClose size={16} color={theme.text2} />
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Input bar — always rendered. TextInput stays mounted to keep keyboard open during recording. */}
         <View style={[styles.inb, { paddingBottom: inbBottomPad }]}>
@@ -587,7 +618,15 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
           </View>
 
           {/* Right button — always same position (web: rb-main / sbb) */}
-          {recording ? (
+          {editMsg ? (
+            <TouchableOpacity
+              style={[styles.roundBtn, styles.sbBtn, { backgroundColor: accentColor, shadowColor: accentColor }]}
+              onPress={handleEditSubmit}
+              activeOpacity={0.8}
+            >
+              <IconCheck size={20} color="#fff" />
+            </TouchableOpacity>
+          ) : recording ? (
             <TouchableOpacity
               style={[styles.roundBtn, styles.sbBtn, { backgroundColor: accentColor, shadowColor: accentColor }]}
               onPress={handleSendAudio}
@@ -645,12 +684,6 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
           canPrivate={!!(isGeneralChat && selectedMsg && selectedMsg.sender !== user && onOpenPrivate)}
         />
 
-        <EditPanel
-          visible={!!editMsg}
-          initialText={editMsg?.text || ''}
-          onConfirm={handleEditConfirm}
-          onCancel={() => setEditMsg(null)}
-        />
 
         <ForwardModal
           visible={!!forwardMsg}
@@ -708,9 +741,20 @@ const styles = StyleSheet.create({
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60 },
   emptyText: { color: theme.text3, fontSize: 15 },
 
+  editBar: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderTopWidth: 1, borderTopColor: theme.border,
+    gap: 8,
+    backgroundColor: 'rgba(15,12,41,0.82)',
+  },
+  editBarContent: { flex: 1, minWidth: 0 },
+  editBarLabel: { fontSize: 13, color: theme.accent, fontWeight: '700', marginBottom: 1 },
+  editBarMedia: { fontSize: 12, color: theme.text2 },
+  editBarClose: { padding: 4, flexShrink: 0 },
+
   /* .rb — gap:8, padding:8 12, background:--bg2, border-top:--brd */
   replyBar: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 12, paddingVertical: 8,
     borderTopWidth: 1, borderTopColor: theme.border,

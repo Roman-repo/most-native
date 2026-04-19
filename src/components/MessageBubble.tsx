@@ -301,13 +301,8 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
             )}
             {!m.sticker && !m.animSticker && !m.image && !m.audio && !m.vidMsg && (() => {
               const timeStr = formatTime(m.ts);
-              const editedPrefix = m.edited ? 'изм. ' : '';
-              const checkSuffix = isMe ? (isRead ? ' ✓✓' : ' ✓') : '';
-              const spacerChars = Math.ceil((editedPrefix.length + timeStr.length + checkSuffix.length) * 1.4) + 3;
-              const spacer = '\u00A0'.repeat(spacerChars);
               return (
-                <View>
-                  <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther, isMe && bubbleColor ? { backgroundColor: bubbleColor, shadowColor: bubbleColor } : undefined]}>
+                <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther, isMe && bubbleColor ? { backgroundColor: bubbleColor, shadowColor: bubbleColor } : undefined]}>
                     {m.forwarded && (
                       <Text style={styles.forwarded}>↪ Переслано от {m.forwarded}</Text>
                     )}
@@ -323,26 +318,33 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
                     {m.text ? (
                       <Text style={styles.text}>
                         {m.text}
-                        <Text style={styles.timeSpacer}>{spacer}</Text>
+                        {reactionEntries.length === 0 && <Text style={styles.timeSpacer}>{'\u00A0'.repeat(Math.ceil((( m.edited ? 5 : 0) + timeStr.length + (isMe ? 3 : 0)) * 1.4) + 3)}</Text>}
                       </Text>
                     ) : null}
-                    <View style={styles.timeInline} pointerEvents="none">
-                      {m.edited && <Text style={styles.edited}>изм. </Text>}
-                      <Text style={[styles.time, isMe ? styles.timeMe : styles.timeOther]}>{timeStr}</Text>
-                      {isMe && <CheckMark read={isRead} />}
-                    </View>
+                    {reactionEntries.length > 0 ? (
+                      <View style={styles.metaRow}>
+                        <View style={styles.metaReactions}>
+                          {reactionEntries.map(([emoji, count]) => (
+                            <TouchableOpacity key={emoji} style={styles.reactionBadge} onPress={() => onReactionPress(m._key, emoji)}>
+                              <Text style={styles.reactionEmoji}>{emoji}</Text>
+                              {count > 1 && <Text style={styles.reactionCount}>{count}</Text>}
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                        <View style={styles.metaTime}>
+                          {m.edited && <Text style={styles.edited}>изм. </Text>}
+                          <Text style={[styles.time, isMe ? styles.timeMe : styles.timeOther]}>{timeStr}</Text>
+                          {isMe && <CheckMark read={isRead} />}
+                        </View>
+                      </View>
+                    ) : (
+                      <View style={styles.timeInline} pointerEvents="none">
+                        {m.edited && <Text style={styles.edited}>изм. </Text>}
+                        <Text style={[styles.time, isMe ? styles.timeMe : styles.timeOther]}>{timeStr}</Text>
+                        {isMe && <CheckMark read={isRead} />}
+                      </View>
+                    )}
                   </View>
-                  {reactionEntries.length > 0 && (
-                    <View style={[styles.reactionsRow, isMe ? styles.reactionsRowMe : styles.reactionsRowOther]}>
-                      {reactionEntries.map(([emoji, count]) => (
-                        <TouchableOpacity key={emoji} style={styles.reactionBadge} onPress={() => onReactionPress(m._key, emoji)}>
-                          <Text style={styles.reactionEmoji}>{emoji}</Text>
-                          {count > 1 && <Text style={styles.reactionCount}>{count}</Text>}
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  )}
-                </View>
               );
             })()}
           </TouchableOpacity>
@@ -431,6 +433,9 @@ const styles = StyleSheet.create({
   meta: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', marginTop: 3, gap: 2 },
   timeInline: { position: 'absolute', right: 10, bottom: 6, flexDirection: 'row', alignItems: 'center' },
   timeSpacer: { fontSize: 16, color: 'transparent' },
+  metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 3 },
+  metaReactions: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
+  metaTime: { flexDirection: 'row', alignItems: 'center', gap: 2, marginLeft: 8 },
   edited: { fontSize: 11, color: 'rgba(255,255,255,0.5)' },
   timeMe: { color: 'rgba(255,255,255,0.85)' },
   timeOther: { color: 'rgba(255,255,255,0.5)' },
@@ -479,9 +484,6 @@ const styles = StyleSheet.create({
   },
   vidDurText: { color: '#fff', fontSize: 11 },
 
-  reactionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 2, paddingHorizontal: 12 },
-  reactionsRowMe: { justifyContent: 'flex-end' },
-  reactionsRowOther: { justifyContent: 'flex-start' },
   reactionBadge: {
     flexDirection: 'row',
     alignItems: 'center',
