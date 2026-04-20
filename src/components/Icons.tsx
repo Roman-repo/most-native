@@ -198,6 +198,23 @@ export function IconClose({ size = 16, color = '#fff' }: IconProps) {
   );
 }
 
+export function IconVideoCamera({ size = 22, color = '#fff' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Polygon points="23 7 16 12 23 17 23 7" stroke={color} strokeWidth={s} strokeLinecap="round" strokeLinejoin="round" />
+      <Rect x="1" y="5" width="15" height="14" rx="2" ry="2" stroke={color} strokeWidth={s} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+export function IconChat({ size = 22, color = '#fff' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke={color} strokeWidth={s} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
 export function IconCheck({ size = 20, color = '#fff' }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">

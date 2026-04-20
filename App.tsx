@@ -10,6 +10,7 @@ import { db } from './src/services/firebase';
 import LoginScreen from './src/screens/LoginScreen';
 import ChatListScreen from './src/screens/ChatListScreen';
 import ChatScreen from './src/screens/ChatScreen';
+import UserProfileScreen from './src/screens/UserProfileScreen';
 import DrawerContent from './src/screens/DrawerContent';
 import { theme } from './src/styles/theme';
 
@@ -23,6 +24,7 @@ export default function App() {
   const [user, setUser] = useState('');
   const [currentChat, setCurrentChat] = useState<ChatInfo | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [profileUser, setProfileUser] = useState<string | null>(null);
   const drawerAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
 
   // Автологин при запуске
@@ -122,6 +124,16 @@ export default function App() {
               isGroup={currentChat.isGroup}
               onBack={handleBackToList}
               onOpenPrivate={handleOpenPrivate}
+              onOpenProfile={(otherUser) => setProfileUser(otherUser)}
+            />
+          )}
+
+          {/* User profile overlay (slides in over ChatScreen) */}
+          {screen === 'chat' && currentChat && profileUser && (
+            <UserProfileScreen
+              username={profileUser}
+              chatId={currentChat.id}
+              onBack={() => setProfileUser(null)}
             />
           )}
 
