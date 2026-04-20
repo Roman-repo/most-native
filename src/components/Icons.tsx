@@ -222,3 +222,55 @@ export function IconCheck({ size = 20, color = '#fff' }: IconProps) {
     </Svg>
   );
 }
+
+// Call screen icons — точная копия из web-source/modules/CallManager.js
+
+export function IconCallSpeaker({ size = 22, color = '#fff' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Polygon points="11 5 6 9 2 9 2 15 6 15 11 19" stroke={color} strokeWidth={s} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M19.07 4.93a10 10 0 0 1 0 14.14" stroke={color} strokeWidth={s} strokeLinecap="round" />
+      <Path d="M15.54 8.46a5 5 0 0 1 0 7.07" stroke={color} strokeWidth={s} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+export function IconCallVideo({ size = 22, color = '#fff' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Polygon points="23 7 16 12 23 17 23 7" stroke={color} strokeWidth={s} strokeLinecap="round" strokeLinejoin="round" />
+      <Rect x="1" y="5" width="15" height="14" rx="2" stroke={color} strokeWidth={s} strokeLinecap="round" strokeLinejoin="round" />
+      <Line x1="1" y1="1" x2="23" y2="23" stroke={color} strokeWidth={s} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+export function IconCallMic({ size = 22, color = '#fff' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" stroke={color} strokeWidth={s} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M19 10v2a7 7 0 0 1-14 0v-2" stroke={color} strokeWidth={s} strokeLinecap="round" strokeLinejoin="round" />
+      <Line x1="12" y1="19" x2="12" y2="23" stroke={color} strokeWidth={s} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+export function IconCallFlip({ size = 22, color = '#fff' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M23 4v6h-6" stroke={color} strokeWidth={s} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M1 20v-6h6" stroke={color} strokeWidth={s} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10" stroke={color} strokeWidth={s} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14" stroke={color} strokeWidth={s} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+export function IconCallHangup({ size = 24, color = '#fff' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.11 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91" stroke={color} strokeWidth={s25} strokeLinecap="round" strokeLinejoin="round" />
+      <Line x1="23" y1="1" x2="1" y2="23" stroke={color} strokeWidth={s25} strokeLinecap="round" />
+    </Svg>
+  );
+}
