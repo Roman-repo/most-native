@@ -44,6 +44,7 @@ type Props = {
   isGroup: boolean;
   onBack: () => void;
   onOpenPrivate?: (otherUser: string) => void;
+  onOpenProfile?: (otherUser: string) => void;
 };
 
 type ReplyInfo = { sender: string; text: string };
@@ -56,7 +57,7 @@ function getAvatarColor(name: string): string {
 }
 
 
-export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, onOpenPrivate }: Props) {
+export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, onOpenPrivate, onOpenProfile }: Props) {
   const insets = useSafeAreaInsets();
   const inbBottomPad = Platform.OS === 'android' ? 6 : Math.max(insets.bottom, 20);
   // — Chat state —
@@ -490,7 +491,12 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
           <TouchableOpacity onPress={onBack} style={styles.headerBtn} activeOpacity={0.6}>
             <IconBack size={22} color={theme.text} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.headerCenter} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={styles.headerCenter}
+            activeOpacity={0.7}
+            disabled={isGeneralChat || isGroup || !onOpenProfile}
+            onPress={() => onOpenProfile && onOpenProfile(chatName)}
+          >
             <View style={[styles.headerAvatar, { backgroundColor: avatarBg }]}>
               <Text style={styles.headerAvatarText}>{avatarChar}</Text>
             </View>
