@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v4.8.1 (2026-04-24) — Фикс перекрытия поля ввода клавиатурой
+
+**Баг:** при тапе в поле ввода Android-клавиатура (включая языковую/suggestion-панель) перекрывала инпут — поле не сдвигалось вверх.
+
+**Причина:** с `edgeToEdgeEnabled: true` (Android 15 edge-to-edge) `windowSoftInputMode="adjustResize"` в манифесте не триггерит нативный ресайз окна — приложение само владеет insets. `KeyboardAvoidingView behavior={undefined}` на Android полагался на нативный ресайз — и ничего не делал.
+
+**Фикс:** `src/screens/ChatScreen.tsx` — `behavior` для Android сменён с `undefined` на `'height'`. Теперь RN компенсирует высоту клавиатуры на уровне JS.
+
 ## v4.8.0 (2026-04-24) — Аудиозвонки (WebRTC)
 
 **Фича:** полноценные аудиозвонки через WebRTC + Firebase signaling. Порт `CallManager.js` из веб-версии.
