@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Animated, Image } from 'react
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { IconPlay, IconPause } from './Icons';
+import CallBubble from './CallBubble';
 import { base64ToTempFile } from '../managers/MediaManager';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { SvgXml } from 'react-native-svg';
@@ -19,6 +20,7 @@ type Props = {
   onReactionPress: (msgKey: string, emoji: string) => void;
   onReply: (msg: Message) => void;
   bubbleColor?: string;
+  peer?: string;
 };
 
 const READ_COLOR = '#55EFC4';
@@ -186,7 +188,10 @@ function VideoBubble({ url, duration, msgKey }: { url: string; duration: string;
   );
 }
 
-const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, showSender, onLongPress, onReactionPress, onReply, bubbleColor }: Props) {
+const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, showSender, onLongPress, onReactionPress, onReply, bubbleColor, peer }: Props) {
+  if (m.system && (m.callDir || m.missed)) {
+    return <CallBubble message={m} peer={peer || m.sender} />;
+  }
   const translateX = useRef(new Animated.Value(0)).current;
   const replyOpacity = useRef(new Animated.Value(0)).current;
 
@@ -366,7 +371,12 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
   prev.isMe === next.isMe &&
   prev.isRead === next.isRead &&
   prev.showSender === next.showSender &&
-  prev.bubbleColor === next.bubbleColor
+  prev.bubbleColor === next.bubbleColor &&
+  prev.peer === next.peer &&
+  prev.message.system === next.message.system &&
+  prev.message.callDir === next.message.callDir &&
+  prev.message.callDur === next.message.callDur &&
+  prev.message.missed === next.message.missed
 );
 
 export default MessageBubble;

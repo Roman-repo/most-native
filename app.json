@@ -2,7 +2,7 @@
   "expo": {
     "name": "most-native",
     "slug": "most-native",
-    "version": "1.0.0",
+    "version": "4.8.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -21,7 +21,15 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.WAKE_LOCK",
+        "android.permission.BLUETOOTH_CONNECT"
+      ],
+      "package": "com.romanlg.mostnative",
+      "versionCode": 1
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -29,6 +37,11 @@
     "plugins": [
       "expo-audio",
       "expo-video"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "cc393382-92b1-43c6-8e87-c15a04d97d23"
+      }
+    }
   }
 }

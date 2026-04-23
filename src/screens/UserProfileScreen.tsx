@@ -8,6 +8,7 @@ import { PanGestureHandler, State as GHState } from 'react-native-gesture-handle
 import { theme } from '../styles/theme';
 import { listenMessages, type Message } from '../managers/ChatManager';
 import { listenUserPresence, formatLastSeen, type PresenceState } from '../services/presence';
+import { startCall } from '../services/CallManager';
 import {
   IconBack, IconChat, IconPhone, IconVideoCamera,
 } from '../components/Icons';
@@ -122,8 +123,17 @@ export default function UserProfileScreen({ username, chatId, onBack }: Props) {
   const statusText = presence?.online ? 'онлайн' : formatLastSeen(presence?.lastSeenTs ?? null);
   const statusColor = presence?.online ? '#4CAF50' : theme.text2;
 
-  const showCallStub = useCallback(() => {
-    Alert.alert('В разработке', 'Звонки появятся в одном из следующих релизов.');
+  const handleAudioCall = useCallback(async () => {
+    try {
+      await startCall(username);
+      onBack();
+    } catch (e: any) {
+      Alert.alert('Не удалось позвонить', e?.message || 'Проверь доступ к микрофону и подключение.');
+    }
+  }, [username, onBack]);
+
+  const showVideoStub = useCallback(() => {
+    Alert.alert('В разработке', 'Видеозвонки появятся в следующем релизе (v4.9.0).');
   }, []);
 
   const showMediaStub = useCallback(() => {
@@ -234,11 +244,11 @@ export default function UserProfileScreen({ username, chatId, onBack }: Props) {
                 <IconChat size={22} color={theme.accent} />
                 <Text style={styles.actionLabel}>Чат</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7} onPress={showCallStub}>
+              <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7} onPress={handleAudioCall}>
                 <IconPhone size={22} color={theme.accent} />
                 <Text style={styles.actionLabel}>Звонок</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7} onPress={showCallStub}>
+              <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7} onPress={showVideoStub}>
                 <IconVideoCamera size={22} color={theme.accent} />
                 <Text style={styles.actionLabel}>Видео</Text>
               </TouchableOpacity>

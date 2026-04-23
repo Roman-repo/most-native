@@ -466,8 +466,9 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
       onReactionPress={handleReactionPress}
       onReply={handleReply}
       bubbleColor={chatTheme?.acc}
+      peer={!isGroup && !isGeneralChat ? chatName : undefined}
     />
-  ), [user, showSenderMap, handleLongPress, handleReactionPress, handleReply, chatTheme, maxOtherReadTs]);
+  ), [user, showSenderMap, handleLongPress, handleReactionPress, handleReply, chatTheme, maxOtherReadTs, isGroup, isGeneralChat, chatName]);
 
 
   const avatarBg = isGeneralChat ? theme.accent : isGroup ? '#00B894' : getAvatarColor(chatName);
