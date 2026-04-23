@@ -124,7 +124,8 @@ function startGlobalListener() {
     snap.forEach((child) => {
       const d = child.val();
       if (!d) return;
-      if (d.to === me && d.status === 'ringing') {
+      if (d.to === me && d.from !== me && d.status === 'ringing') {
+        if (callId === child.key) return; // уже обрабатываем этот входящий
         if (state !== 'idle') {
           // BUSY: автоматически отклоняем как "вторая линия"
           update(ref(db, 'calls/' + child.key), { status: 'busy' }).catch(() => {});
@@ -161,6 +162,7 @@ function handleIncoming(cid: string, data: any) {
 export async function startCall(target: string) {
   if (state !== 'idle') return;
   if (!me) throw new Error('CallManager not initialized');
+  if (target === me) throw new Error('Нельзя позвонить самому себе');
 
   state = 'outgoing';
   peer = target;

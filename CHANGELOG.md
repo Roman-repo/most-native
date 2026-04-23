@@ -1,5 +1,32 @@
 # CHANGELOG
 
+## v4.8.0 (2026-04-24) — Аудиозвонки (WebRTC)
+
+**Фича:** полноценные аудиозвонки через WebRTC + Firebase signaling. Порт `CallManager.js` из веб-версии.
+
+**Что сделано:**
+- `src/services/CallManager.ts` — WebRTC peer connection, signaling через `/calls/{callId}` в Firebase RTDB, ICE через metered.ca (STUN+TURN), глобальный слушатель входящих для залогиненного пользователя.
+- `src/services/ringtones.ts` — управление рингтонами через `expo-audio` (`createAudioPlayer`), поддержка пер-юзерных рингтонов через `/userRingtones/{me}/{other}`, 5 вариантов звонка + ringback.
+- `assets/ringtones/` — 6 mp3 с Mixkit (ring1-5 + ringback).
+- `src/screens/CallScreen.tsx` — полноэкранный оверлей поверх всего приложения (3 состояния: outgoing/incoming/active), градиентный фон, аватар 170px с двумя пульсирующими кольцами (Animated.loop), таймер разговора, кнопки управления (mute/speaker/end/accept).
+- `src/components/CallBubble.tsx` — системный пузырь звонка в чате (входящий/исходящий/пропущенный/отклонённый/busy, redial по тапу).
+- `src/managers/ChatManager.ts` — `Message.callDir/callDur/missed` для истории звонков.
+- `src/screens/UserProfileScreen.tsx` — кнопка «Звонок» теперь реально вызывает `startCall(username)`.
+- `App.tsx` — `initCallManager(user)` + `<CallScreen />` оверлей при логине.
+- Android permissions: `RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`, `WAKE_LOCK`, `BLUETOOTH_CONNECT`.
+- `eas.json` — `appVersionSource: local` (читаем версию из app.json, а не из remote store).
+- Версионирование: `src/version.ts` (`APP_VERSION_FULL` = `v{version} (build {versionCode})`), версия в бургер-меню.
+
+**Исправленные баги:**
+- Само-busy в `startGlobalListener`: слушатель срабатывал повторно (при ICE/answer/status апдейтах), видел `state !== 'idle'` и ставил busy на собственный входящий. Фикс: игнорируем `callId === child.key`.
+- Self-call: проверка `d.from !== me` в слушателе + `target !== me` в `startCall`.
+- SecurityException: добавлен `WAKE_LOCK` — требуется `InCallManager.start()`.
+
+**Известные ограничения:**
+- Видеозвонки — v4.9.0.
+- Пуш-уведомления о входящем звонке при закрытом приложении — отложено (Фаза 5).
+- Два эмулятора одновременно — ненадёжный звук (один источник host audio); проверять между эмулятором и физическим устройством.
+
 ## v4.7.0 (2026-04-20) — Профиль собеседника
 
 **Фича:** тап на хедер чата (имя/аватар/статус) в приватном чате → плавно выезжает слева панель профиля. Портировано из веба (`showUserProfile` в `ui.js`).

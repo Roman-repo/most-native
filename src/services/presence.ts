@@ -49,6 +49,37 @@ export function startPresence(user: string): () => void {
   };
 }
 
+// Слушаем всех онлайн-юзеров. Возвращает список тех, у кого online/{user}.ts свежее порога.
+// Исключает самого себя.
+export function listenOnlineUsers(me: string, cb: (users: string[]) => void): () => void {
+  const rootRef = ref(db, 'online');
+  let raw: Record<string, any> = {};
+  let intervalId: ReturnType<typeof setInterval> | null = null;
+
+  const emit = () => {
+    const now = Date.now();
+    const list: string[] = [];
+    for (const [u, v] of Object.entries(raw)) {
+      if (u === me) continue;
+      const ts = v && typeof v.ts === 'number' ? v.ts : null;
+      if (ts !== null && now - ts < ONLINE_THRESHOLD_MS) list.push(u);
+    }
+    list.sort((a, b) => a.localeCompare(b));
+    cb(list);
+  };
+
+  const unsub = onValue(rootRef, (snap) => {
+    raw = snap.val() || {};
+    emit();
+  });
+  intervalId = setInterval(emit, 20_000);
+
+  return () => {
+    off(rootRef, 'value', unsub);
+    if (intervalId) clearInterval(intervalId);
+  };
+}
+
 export function listenUserPresence(user: string, cb: (state: PresenceState) => void): () => void {
   const onlineRef = ref(db, 'online/' + user);
   const lastSeenRef = ref(db, 'lastSeen/' + user);

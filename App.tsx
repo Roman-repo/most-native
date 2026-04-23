@@ -11,7 +11,10 @@ import LoginScreen from './src/screens/LoginScreen';
 import ChatListScreen from './src/screens/ChatListScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import UserProfileScreen from './src/screens/UserProfileScreen';
+import CallScreen from './src/screens/CallScreen';
 import DrawerContent from './src/screens/DrawerContent';
+import { init as initCallManager } from './src/services/CallManager';
+import { setMeForRingtones } from './src/services/ringtones';
 import { theme } from './src/styles/theme';
 
 type Screen = 'login' | 'chatList' | 'chat';
@@ -44,6 +47,13 @@ export default function App() {
     if (!user) return;
     const stop = startPresence(user);
     return stop;
+  }, [user]);
+
+  // CallManager: init listener входящих звонков при логине
+  useEffect(() => {
+    if (!user) return;
+    initCallManager(user);
+    setMeForRingtones(user);
   }, [user]);
 
   function openDrawer() {
@@ -154,8 +164,12 @@ export default function App() {
               user={user}
               onLogout={handleLogout}
               onClose={closeDrawer}
+              onOpenPrivate={handleOpenPrivate}
             />
           </Animated.View>
+
+          {/* Call overlay — поверх всего */}
+          {user && <CallScreen />}
         </View>
       </SafeAreaProvider>
     </GestureHandlerRootView>

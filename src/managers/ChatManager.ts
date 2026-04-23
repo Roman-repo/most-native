@@ -18,6 +18,9 @@ export type Message = {
   edited?: boolean;
   forwarded?: string;
   system?: boolean;
+  callDir?: 'in' | 'out';
+  callDur?: string;
+  missed?: boolean;
 };
 
 export type PinInfo = { key: string; text: string; sender: string };
