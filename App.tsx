@@ -137,6 +137,7 @@ export default function App() {
               onBack={handleBackToList}
               onOpenPrivate={handleOpenPrivate}
               onOpenProfile={(otherUser) => setProfileUser(otherUser)}
+              onNavigateToChat={handleOpenChat}
             />
           )}
 
