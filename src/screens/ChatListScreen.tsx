@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
   StyleSheet, ActivityIndicator,
@@ -150,6 +150,49 @@ export default function ChatListScreen({ user, onOpenChat, onOpenDrawer }: Props
     return colors[hash];
   }
 
+  const renderChatItem = useCallback(({ item }: { item: Chat }) => (
+    <TouchableOpacity
+      style={styles.chatItem}
+      onPress={() => onOpenChat(item.id, item.name, item.isGroup || item.isGeneral)}
+      activeOpacity={0.7}
+    >
+      <View style={styles.avatarWrap}>
+        {item.isGeneral || item.isGroup ? (
+          <View style={[styles.avatar, { backgroundColor: getAvatarBg(item) }]}>
+            <Text style={styles.avatarText}>{getAvatar(item)}</Text>
+          </View>
+        ) : (
+          <AvatarView user={item.otherUser || item.name} size={48} fontSize={20} />
+        )}
+        {item.otherUser && onlineMap[item.otherUser] && (
+          <View style={styles.onlineDot} />
+        )}
+      </View>
+      <View style={styles.chatInfo}>
+        <View style={styles.chatTop}>
+          <Text style={styles.chatName} numberOfLines={1}>{item.name}</Text>
+          <Text style={styles.chatTime}>{formatTime(item.lastTs)}</Text>
+        </View>
+        <View style={styles.chatBottom}>
+          {typingMap[item.id] ? (
+            <Text style={[styles.chatPreview, styles.chatPreviewTyping]} numberOfLines={1}>печатает...</Text>
+          ) : (
+            <Text style={styles.chatPreview} numberOfLines={1}>{item.lastText || 'Нет сообщений'}</Text>
+          )}
+          {unreadMap[item.id]?.count > 0 && (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadText}>
+                {unreadMap[item.id].capped ? '50+' : unreadMap[item.id].count}
+              </Text>
+            </View>
+          )}
+        </View>
+      </View>
+    </TouchableOpacity>
+  ), [onOpenChat, onlineMap, typingMap, unreadMap]);
+
+  const keyExtractor = useCallback((item: Chat) => item.id, []);
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -175,47 +218,11 @@ export default function ChatListScreen({ user, onOpenChat, onOpenDrawer }: Props
 
       <FlatList
         data={chats}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.chatItem}
-            onPress={() => onOpenChat(item.id, item.name, item.isGroup || item.isGeneral)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.avatarWrap}>
-              {item.isGeneral || item.isGroup ? (
-                <View style={[styles.avatar, { backgroundColor: getAvatarBg(item) }]}>
-                  <Text style={styles.avatarText}>{getAvatar(item)}</Text>
-                </View>
-              ) : (
-                <AvatarView user={item.otherUser || item.name} size={48} fontSize={20} />
-              )}
-              {item.otherUser && onlineMap[item.otherUser] && (
-                <View style={styles.onlineDot} />
-              )}
-            </View>
-            <View style={styles.chatInfo}>
-              <View style={styles.chatTop}>
-                <Text style={styles.chatName} numberOfLines={1}>{item.name}</Text>
-                <Text style={styles.chatTime}>{formatTime(item.lastTs)}</Text>
-              </View>
-              <View style={styles.chatBottom}>
-                {typingMap[item.id] ? (
-                  <Text style={[styles.chatPreview, styles.chatPreviewTyping]} numberOfLines={1}>печатает...</Text>
-                ) : (
-                  <Text style={styles.chatPreview} numberOfLines={1}>{item.lastText || 'Нет сообщений'}</Text>
-                )}
-                {unreadMap[item.id]?.count > 0 && (
-                  <View style={styles.unreadBadge}>
-                    <Text style={styles.unreadText}>
-                      {unreadMap[item.id].capped ? '50+' : unreadMap[item.id].count}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
-          </TouchableOpacity>
-        )}
+        keyExtractor={keyExtractor}
+        renderItem={renderChatItem}
+        initialNumToRender={12}
+        maxToRenderPerBatch={8}
+        windowSize={7}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         ListEmptyComponent={
           <Text style={styles.empty}>Нет чатов</Text>

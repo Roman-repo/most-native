@@ -536,6 +536,8 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
     />
   ), [user, showSenderMap, handleLongPress, handleReactionPress, handleReply, chatTheme, maxOtherReadTs, isGroup, isGeneralChat, chatName]);
 
+  const keyExtractor = useCallback((item: Message) => item._key, []);
+
 
   const avatarBg = isGeneralChat ? theme.accent : isGroup ? '#00B894' : getAvatarColor(chatName);
   const avatarChar = isGeneralChat ? '💬' : isGroup ? '👥' : chatName.charAt(0).toUpperCase();
@@ -615,7 +617,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
           <FlatList
             ref={flatListRef}
             data={reversedMessages}
-            keyExtractor={(item) => item._key}
+            keyExtractor={keyExtractor}
             renderItem={renderItem}
             inverted
             onScroll={(e) => {
