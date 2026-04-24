@@ -12,6 +12,7 @@ import {
 } from 'expo-audio';
 import { theme } from '../styles/theme';
 import MessageBubble from '../components/MessageBubble';
+import AvatarView from '../components/AvatarView';
 import ReactionPicker from '../components/ReactionPicker';
 import ForwardModal from '../components/ForwardModal';
 import PinBar from '../components/PinBar';
@@ -498,9 +499,13 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
             disabled={isGeneralChat || isGroup || !onOpenProfile}
             onPress={() => onOpenProfile && onOpenProfile(chatName)}
           >
-            <View style={[styles.headerAvatar, { backgroundColor: avatarBg }]}>
-              <Text style={styles.headerAvatarText}>{avatarChar}</Text>
-            </View>
+            {isGeneralChat || isGroup ? (
+              <View style={[styles.headerAvatar, { backgroundColor: avatarBg }]}>
+                <Text style={styles.headerAvatarText}>{avatarChar}</Text>
+              </View>
+            ) : (
+              <AvatarView user={chatName} size={40} fontSize={17} />
+            )}
             <View style={styles.headerInfo}>
               <Text style={styles.headerTitle} numberOfLines={1}>{chatName}</Text>
               {typers.length > 0 ? (

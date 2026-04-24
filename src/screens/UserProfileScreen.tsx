@@ -12,6 +12,7 @@ import { startCall } from '../services/CallManager';
 import {
   IconBack, IconChat, IconPhone, IconVideoCamera,
 } from '../components/Icons';
+import AvatarView from '../components/AvatarView';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -231,9 +232,7 @@ export default function UserProfileScreen({ username, chatId, onBack }: Props) {
           >
             {/* Top: avatar + name + status */}
             <View style={styles.topBlock}>
-              <View style={[styles.avatar, { backgroundColor: avatarBg }]}>
-                <Text style={styles.avatarText}>{avatarChar}</Text>
-              </View>
+              <AvatarView user={username} size={120} fontSize={48} style={{ marginBottom: 14 }} />
               <Text style={styles.name} numberOfLines={1}>{username}</Text>
               <Text style={[styles.status, { color: statusColor }]}>{statusText}</Text>
             </View>

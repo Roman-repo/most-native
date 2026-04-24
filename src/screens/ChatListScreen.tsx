@@ -10,6 +10,7 @@ import { theme } from '../styles/theme';
 import { listenUserPresence } from '../services/presence';
 import { listenTyping } from '../services/typing';
 import { listenUnread } from '../services/unread';
+import AvatarView from '../components/AvatarView';
 
 type Chat = {
   id: string;
@@ -182,9 +183,13 @@ export default function ChatListScreen({ user, onOpenChat, onOpenDrawer }: Props
             activeOpacity={0.7}
           >
             <View style={styles.avatarWrap}>
-              <View style={[styles.avatar, { backgroundColor: getAvatarBg(item) }]}>
-                <Text style={styles.avatarText}>{getAvatar(item)}</Text>
-              </View>
+              {item.isGeneral || item.isGroup ? (
+                <View style={[styles.avatar, { backgroundColor: getAvatarBg(item) }]}>
+                  <Text style={styles.avatarText}>{getAvatar(item)}</Text>
+                </View>
+              ) : (
+                <AvatarView user={item.otherUser || item.name} size={48} fontSize={20} />
+              )}
               {item.otherUser && onlineMap[item.otherUser] && (
                 <View style={styles.onlineDot} />
               )}
