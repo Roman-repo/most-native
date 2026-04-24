@@ -3,28 +3,30 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-nati
 import { theme } from '../styles/theme';
 import { logout } from '../services/auth';
 import { listenOnlineUsers } from '../services/presence';
+import { listenProfile, type Profile } from '../services/profiles';
+import AvatarView from '../components/AvatarView';
 import { APP_VERSION_FULL } from '../version';
-
-const AVATAR_COLORS = ['#E85D75','#6C5CE7','#00B894','#FDCB6E','#E17055','#0984E3','#A29BFE','#55EFC4'];
-function avatarColor(name: string): string {
-  let h = 0;
-  for (const c of name) h = (h * 31 + c.charCodeAt(0)) % AVATAR_COLORS.length;
-  return AVATAR_COLORS[h];
-}
 
 type Props = {
   user: string;
   onLogout: () => void;
   onClose: () => void;
   onOpenPrivate?: (otherUser: string) => void;
+  onOpenProfileEdit?: () => void;
 };
 
-export default function DrawerContent({ user, onLogout, onClose, onOpenPrivate }: Props) {
+export default function DrawerContent({ user, onLogout, onClose, onOpenPrivate, onOpenProfileEdit }: Props) {
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+  const [myProfile, setMyProfile] = useState<Profile | null>(null);
 
   useEffect(() => {
     if (!user) return;
     return listenOnlineUsers(user, setOnlineUsers);
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    return listenProfile(user, setMyProfile);
   }, [user]);
 
   async function handleLogout() {
@@ -37,22 +39,32 @@ export default function DrawerContent({ user, onLogout, onClose, onOpenPrivate }
     onClose();
   }
 
+  function handleOpenProfile() {
+    onOpenProfileEdit?.();
+    onClose();
+  }
+
+  const displayName = myProfile?.displayName?.trim() || user;
+  const subline = myProfile?.status?.trim() || 'В сети';
+
   return (
     <View style={styles.container}>
       {/* Аватар и имя */}
-      <View style={styles.profile}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{user.charAt(0).toUpperCase()}</Text>
-        </View>
-        <Text style={styles.userName}>{user}</Text>
-        <Text style={styles.userStatus}>В сети</Text>
-      </View>
+      <TouchableOpacity style={styles.profile} activeOpacity={0.7} onPress={handleOpenProfile}>
+        <AvatarView user={user} size={72} avatarOverride={myProfile?.avatar || null} fontSize={30} style={{ marginBottom: 12 }} />
+        <Text style={styles.userName}>{displayName}</Text>
+        <Text style={styles.userStatus} numberOfLines={1}>{subline}</Text>
+      </TouchableOpacity>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 20 }}>
         {/* Меню */}
         <TouchableOpacity style={styles.menuItem} onPress={onClose}>
           <Text style={styles.menuIcon}>💬</Text>
           <Text style={styles.menuText}>Чаты</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.menuItem} onPress={handleOpenProfile}>
+          <Text style={styles.menuIcon}>👤</Text>
+          <Text style={styles.menuText}>Мой профиль</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.menuItem}>
           <Text style={styles.menuIcon}>⚙️</Text>
@@ -77,8 +89,8 @@ export default function DrawerContent({ user, onLogout, onClose, onOpenPrivate }
               activeOpacity={0.7}
               onPress={() => handleOpenPrivate(u)}
             >
-              <View style={[styles.userAvatar, { backgroundColor: avatarColor(u) }]}>
-                <Text style={styles.userAvatarText}>{u.charAt(0).toUpperCase()}</Text>
+              <View style={styles.userAvatarWrap}>
+                <AvatarView user={u} size={36} fontSize={15} />
                 <View style={styles.onlineDot} />
               </View>
               <Text style={styles.userItemName} numberOfLines={1}>{u}</Text>
@@ -112,16 +124,6 @@ const styles = StyleSheet.create({
     borderBottomColor: theme.border,
     marginBottom: 16,
   },
-  avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: theme.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  avatarText: { fontSize: 30, color: '#fff', fontWeight: 'bold' },
   userName: { fontSize: 20, fontWeight: 'bold', color: theme.text, marginBottom: 4 },
   userStatus: { fontSize: 13, color: theme.green },
   menuItem: {
@@ -160,12 +162,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     gap: 12,
   },
-  userAvatar: {
-    width: 36, height: 36, borderRadius: 18,
-    alignItems: 'center', justifyContent: 'center',
-    position: 'relative',
-  },
-  userAvatarText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  userAvatarWrap: { position: 'relative' },
   onlineDot: {
     position: 'absolute', right: -1, bottom: -1,
     width: 11, height: 11, borderRadius: 6,

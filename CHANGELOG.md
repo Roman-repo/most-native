@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## v4.9.0 (2026-04-24) — Редактирование своего профиля
+
+**Фича:** раздел профиля пользователя в RTDB (`/profiles/<username>`), аватары, редактирование имени/статуса/телефона/дня рождения, подстановка аватара во все места где раньше был цветной кружок с буквой.
+
+**Что сделано:**
+- `src/services/profiles.ts` — CRUD для `/profiles/<user>` (`getProfile`, `setProfile`, `listenProfile`, `setAvatar` через base64 data-URL). Совместимо с веб-версией.
+- `src/components/AvatarView.tsx` — переиспользуемый аватар с подпиской на `listenProfile`: если есть `avatar` — `<Image>`, иначе цветной кружок с буквой (как раньше).
+- `src/components/AvatarPicker.tsx` — bottom sheet с тремя опциями: «Сделать селфи» (`launchCameraAsync`, фронтальная камера), «Выбрать из галереи» (`launchImageLibraryAsync`), «Удалить». Внутри `allowsEditing: true`, квадрат `[1,1]`, `base64: true`.
+- `src/screens/ProfileEditScreen.tsx` — slide-in справа, как `UserProfileScreen`. Поля: `displayName`, `status`, `phone`, `birthday` + readonly `@username`. Тап по аватару → `AvatarPicker`. Оптимистичное обновление аватара (`setAvatarLocal` до `await setAvatar`, чтобы UI не ждал записи).
+- `src/screens/DrawerContent.tsx` — шапка drawer-а теперь тапабельна (открывает `ProfileEditScreen`), добавлен пункт меню «Мой профиль», онлайн-юзеры отрисованы через `AvatarView`.
+- `App.tsx` — новый оверлей `profileEditOpen`.
+- Замена аватаров на `AvatarView` в приватных чатах: `ChatScreen` (хедер), `ChatListScreen` (превью чатов), `UserProfileScreen` (аватар профиля).
+- `app.json` — добавлены Android permissions `CAMERA` и `READ_MEDIA_IMAGES`.
+- Версия: `4.9.0` в `package.json` и `app.json`.
+
+**Известные ограничения:**
+- Селфи с фронтальной камеры сохраняется зеркальным (баг в бэклоге). Фикс — через `expo-image-manipulator` + `flip: Horizontal`, потребует пересборки APK.
+
 ## v4.8.1 (2026-04-24) — Фикс перекрытия поля ввода клавиатурой
 
 **Баг:** при тапе в поле ввода Android-клавиатура (включая языковую/suggestion-панель) перекрывала инпут — поле не сдвигалось вверх.

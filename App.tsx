@@ -11,6 +11,7 @@ import LoginScreen from './src/screens/LoginScreen';
 import ChatListScreen from './src/screens/ChatListScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import UserProfileScreen from './src/screens/UserProfileScreen';
+import ProfileEditScreen from './src/screens/ProfileEditScreen';
 import CallScreen from './src/screens/CallScreen';
 import DrawerContent from './src/screens/DrawerContent';
 import { init as initCallManager } from './src/services/CallManager';
@@ -28,6 +29,7 @@ export default function App() {
   const [currentChat, setCurrentChat] = useState<ChatInfo | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [profileUser, setProfileUser] = useState<string | null>(null);
+  const [profileEditOpen, setProfileEditOpen] = useState(false);
   const drawerAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
 
   // Автологин при запуске
@@ -165,8 +167,14 @@ export default function App() {
               onLogout={handleLogout}
               onClose={closeDrawer}
               onOpenPrivate={handleOpenPrivate}
+              onOpenProfileEdit={() => setProfileEditOpen(true)}
             />
           </Animated.View>
+
+          {/* Profile edit overlay */}
+          {user && profileEditOpen && (
+            <ProfileEditScreen user={user} onBack={() => setProfileEditOpen(false)} />
+          )}
 
           {/* Call overlay — поверх всего */}
           {user && <CallScreen />}
