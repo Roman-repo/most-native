@@ -502,19 +502,20 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
     else stopTyping(chatId, user);
   }, [chatId, user]);
 
-  // Reversed array для inverted FlatList — сохраняем оригинальные ссылки на объекты
-  const reversedMessages = useMemo(() => [...messages].reverse(), [messages]);
-
   // showSender вычисляем отдельно, не встраивая в объекты сообщений
   const showSenderMap = useMemo(() => {
     const map = new Map<string, boolean>();
-    messages.forEach((item, index) => {
-      map.set(item._key, (isGroup || isGeneralChat) && (index === 0 || messages[index - 1].sender !== item.sender));
-    });
+    let prevSender: string | null = null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      const showSender = (isGroup || isGeneralChat) && (prevSender !== msg.sender);
+      map.set(msg._key, showSender);
+      prevSender = msg.sender;
+    }
     return map;
   }, [messages, isGroup, isGeneralChat]);
 
-  const renderItem = useCallback(({ item, index }: { item: Message; index: number }) => (
+  const renderItem = useCallback(({ item }: { item: Message }) => (
     <MessageBubble
       message={item}
       isMe={item.sender === user}
@@ -527,6 +528,8 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
       peer={!isGroup && !isGeneralChat ? chatName : undefined}
     />
   ), [user, showSenderMap, handleLongPress, handleReactionPress, handleReply, chatTheme, maxOtherReadTs, isGroup, isGeneralChat, chatName]);
+
+  const keyExtractor = useCallback((item: Message) => item._key, []);
 
 
   const avatarBg = isGeneralChat ? theme.accent : isGroup ? '#00B894' : getAvatarColor(chatName);
@@ -606,21 +609,22 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
         <Animated.View style={[styles.listWrap, { opacity: listOpacity }]}>
           <FlatList
             ref={flatListRef}
-            data={reversedMessages}
-            keyExtractor={(item) => item._key}
+            data={messages}
+            keyExtractor={keyExtractor}
             renderItem={renderItem}
             inverted
             onScroll={(e) => {
               isNearBottomRef.current = e.nativeEvent.contentOffset.y < 80;
             }}
-            scrollEventThrottle={100}
+            scrollEventThrottle={16}
             onContentSizeChange={handleContentSizeChange}
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
             style={styles.list}
             contentContainerStyle={[styles.listContent, replyTo ? { paddingBottom: 60 } : undefined]}
-            maxToRenderPerBatch={10}
-            windowSize={10}
-            initialNumToRender={20}
+            maxToRenderPerBatch={8}
+            windowSize={7}
+            initialNumToRender={15}
+            removeClippedSubviews={true}
             ListEmptyComponent={
               <View style={styles.emptyWrap}>
                 <Text style={styles.emptyText}>Начните общение 👋</Text>
