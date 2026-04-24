@@ -14,12 +14,13 @@ import { theme } from '../styles/theme';
 import MessageBubble from '../components/MessageBubble';
 import AvatarView from '../components/AvatarView';
 import ReactionPicker from '../components/ReactionPicker';
-import ForwardModal from '../components/ForwardModal';
+import ForwardModal, { type ForwardTarget } from '../components/ForwardModal';
 import PinBar from '../components/PinBar';
 import ThemePicker from '../components/ThemePicker';
 import * as Clipboard from 'expo-clipboard';
 import { IconBack, IconSmile, IconPaperclip, IconMic, IconSend, IconVideoNote, IconReplyBar, IconClose, IconCtxEdit, IconCheck, IconPhone } from '../components/Icons';
 import ChatMenu, { type ChatMenuAction } from '../components/ChatMenu';
+import Toast from '../components/Toast';
 import { startCall } from '../services/CallManager';
 import VideoRecorder from '../components/VideoRecorder';
 import { sendVideoMsg, editMessage, deleteMessage, forwardMessage } from '../managers/ChatManager';
@@ -49,6 +50,7 @@ type Props = {
   onBack: () => void;
   onOpenPrivate?: (otherUser: string) => void;
   onOpenProfile?: (otherUser: string) => void;
+  onNavigateToChat?: (chatId: string, chatName: string, isGroup: boolean) => void;
 };
 
 type ReplyInfo = { sender: string; text: string };
@@ -61,7 +63,7 @@ function getAvatarColor(name: string): string {
 }
 
 
-export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, onOpenPrivate, onOpenProfile }: Props) {
+export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, onOpenPrivate, onOpenProfile, onNavigateToChat }: Props) {
   const insets = useSafeAreaInsets();
   const inbBottomPad = Platform.OS === 'android' ? 6 : Math.max(insets.bottom, 20);
   // — Chat state —
@@ -77,6 +79,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
   const [chatTheme, setChatThemeState] = useState<ChatTheme | null>(null);
   const [themePickerOpen, setThemePickerOpen] = useState(false);
   const [chatMenuOpen, setChatMenuOpen] = useState(false);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const isNearBottomRef = useRef(true);
   const pinIndexRef = useRef(0);
@@ -402,6 +405,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
   const handleCopy = useCallback(async () => {
     if (!selectedMsg?.text) return;
     await Clipboard.setStringAsync(selectedMsg.text);
+    setToastMsg('Скопировано');
   }, [selectedMsg]);
 
   const handleForward = useCallback(() => {
@@ -445,11 +449,15 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
     setEditMsg(null);
   }, []);
 
-  const handleForwardPick = useCallback(async (targetChatId: string) => {
+  const handleForwardPick = useCallback(async (target: ForwardTarget) => {
     if (!forwardMsg) return;
-    await forwardMessage(targetChatId, user, forwardMsg);
+    const msg = forwardMsg;
     setForwardMsg(null);
-  }, [forwardMsg, user]);
+    await forwardMessage(target.id, user, msg);
+    if (target.id !== chatId && onNavigateToChat) {
+      onNavigateToChat(target.id, target.name, target.isGroup);
+    }
+  }, [forwardMsg, user, chatId, onNavigateToChat]);
 
   const handleThemeSelect = useCallback(async (t: ChatTheme | null) => {
     setChatThemeState(t);
@@ -775,6 +783,13 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
             onClose={() => setChatMenuOpen(false)}
           />
         )}
+
+        <Toast
+          message={toastMsg || ''}
+          visible={!!toastMsg}
+          onHide={() => setToastMsg(null)}
+        />
+
 
         {/* Video recording overlay */}
         {videoRecording && (

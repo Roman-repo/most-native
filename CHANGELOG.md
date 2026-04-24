@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## v4.11.0 (2026-04-24) — Полировка контекстного меню (копирование + пересылка)
+
+**Фича:** toast «Скопировано» после копирования сообщения и Telegram-style пересылка (аватары, переход в целевой чат).
+
+**Что сделано:**
+- `src/components/Toast.tsx` — новый компонент: absolute bottom, fade+slide, авто-скрытие через 2 сек (native driver).
+- `src/screens/ChatScreen.tsx` — `handleCopy` триггерит toast «Скопировано». Новый prop `onNavigateToChat`. `handleForwardPick` принимает полный `ForwardTarget` и после отправки переключается в целевой чат (если не текущий).
+- `src/components/ForwardModal.tsx` — TG-like список получателей: реальные аватары через `AvatarView` для приватных, эмодзи-кружки для общего/группового, превью последнего сообщения, сортировка по `lastTs`. Новый экспортируемый тип `ForwardTarget = { id, name, isGroup }`.
+- `App.tsx` — `handleOpenChat` прокинут в ChatScreen как `onNavigateToChat`.
+
 ## v4.10.0 (2026-04-24) — Видеозвонки
 
 **Фича:** полноценные видеозвонки поверх существующего WebRTC-аудиозвонка. Исходящий с превью своей камеры, активный с fullscreen + PIP и drag/swap, вход в видеозвонок из шапки чата и меню.
