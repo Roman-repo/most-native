@@ -20,6 +20,7 @@ export type Message = {
   system?: boolean;
   callDir?: 'in' | 'out';
   callDur?: string;
+  callVideo?: boolean;
   missed?: boolean;
 };
 

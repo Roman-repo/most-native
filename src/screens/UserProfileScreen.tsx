@@ -133,9 +133,14 @@ export default function UserProfileScreen({ username, chatId, onBack }: Props) {
     }
   }, [username, onBack]);
 
-  const showVideoStub = useCallback(() => {
-    Alert.alert('В разработке', 'Видеозвонки появятся в следующем релизе (v4.9.0).');
-  }, []);
+  const handleVideoCall = useCallback(async () => {
+    try {
+      await startCall(username, true);
+      onBack();
+    } catch (e: any) {
+      Alert.alert('Не удалось позвонить', e?.message || 'Проверь доступ к камере/микрофону и подключение.');
+    }
+  }, [username, onBack]);
 
   const showMediaStub = useCallback(() => {
     Alert.alert('В разработке', 'Полноэкранный просмотр медиа появится позже.');
@@ -247,7 +252,7 @@ export default function UserProfileScreen({ username, chatId, onBack }: Props) {
                 <IconPhone size={22} color={theme.accent} />
                 <Text style={styles.actionLabel}>Звонок</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7} onPress={showVideoStub}>
+              <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7} onPress={handleVideoCall}>
                 <IconVideoCamera size={22} color={theme.accent} />
                 <Text style={styles.actionLabel}>Видео</Text>
               </TouchableOpacity>
