@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
-  FlatList, KeyboardAvoidingView, Platform, Animated, Easing, Keyboard, Vibration, Alert,
+  FlatList, Platform, Animated, Easing, Keyboard, Vibration, Alert,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -37,6 +37,7 @@ import {
 } from '../managers/ChatManager';
 
 const BAR_COUNT = 24;
+const EMOJI_PANEL_HEIGHT = 300;
 
 type Props = {
   chatId: string;
@@ -106,9 +107,12 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
   );
   const recState = useAudioRecorderState(recorder, 80);
 
-  // — Emoji animation —
-  const emojiHeight = useRef(new Animated.Value(0)).current;
+  // — Emoji / keyboard animation —
+  const emojiTranslate = useRef(new Animated.Value(EMOJI_PANEL_HEIGHT)).current; // hidden below by default
+  const bottomPad = useRef(new Animated.Value(0)).current; // shared: keyboard OR emoji
   const emojiAnimating = useRef(false);
+  const emojiOpenRef = useRef(false);
+  const kbHeightRef = useRef(0);
 
   // — Metering → wave bars —
   useEffect(() => {
@@ -151,20 +155,61 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
   const openEmoji = useCallback(() => {
     if (emojiAnimating.current) return;
     emojiAnimating.current = true;
+    emojiOpenRef.current = true;
     Keyboard.dismiss();
     setEmojiOpen(true);
-    Animated.timing(emojiHeight, {
-      toValue: 300, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: false,
-    }).start(() => { emojiAnimating.current = false; });
-  }, [emojiHeight]);
+    Animated.parallel([
+      Animated.timing(emojiTranslate, {
+        toValue: 0, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+      }),
+      Animated.timing(bottomPad, {
+        toValue: EMOJI_PANEL_HEIGHT, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: false,
+      }),
+    ]).start(() => { emojiAnimating.current = false; });
+  }, [emojiTranslate, bottomPad]);
 
   const closeEmoji = useCallback(() => {
     if (emojiAnimating.current) return;
     emojiAnimating.current = true;
-    Animated.timing(emojiHeight, {
-      toValue: 0, duration: 250, easing: Easing.in(Easing.ease), useNativeDriver: false,
-    }).start(() => { emojiAnimating.current = false; setEmojiOpen(false); });
-  }, [emojiHeight]);
+    emojiOpenRef.current = false;
+    const targetPad = kbHeightRef.current; // keyboard may be about to show
+    Animated.parallel([
+      Animated.timing(emojiTranslate, {
+        toValue: EMOJI_PANEL_HEIGHT, duration: 240, easing: Easing.in(Easing.cubic), useNativeDriver: true,
+      }),
+      Animated.timing(bottomPad, {
+        toValue: targetPad, duration: 240, easing: Easing.in(Easing.cubic), useNativeDriver: false,
+      }),
+    ]).start(() => { emojiAnimating.current = false; setEmojiOpen(false); });
+  }, [emojiTranslate, bottomPad]);
+
+  // — Smooth keyboard tracking (replaces KeyboardAvoidingView) —
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvt, (e) => {
+      const h = e.endCoordinates?.height ?? 0;
+      kbHeightRef.current = h;
+      if (emojiOpenRef.current) {
+        // keyboard opened over emoji (user tapped input) → close emoji, settle at kb height
+        closeEmoji();
+        return;
+      }
+      const dur = Platform.OS === 'ios' ? (e.duration || 250) : 240;
+      Animated.timing(bottomPad, {
+        toValue: h, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false,
+      }).start();
+    });
+    const hideSub = Keyboard.addListener(hideEvt, (e) => {
+      kbHeightRef.current = 0;
+      if (emojiOpenRef.current) return; // emoji is managing bottomPad
+      const dur = Platform.OS === 'ios' ? (e.duration || 250) : 200;
+      Animated.timing(bottomPad, {
+        toValue: 0, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false,
+      }).start();
+    });
+    return () => { showSub.remove(); hideSub.remove(); };
+  }, [bottomPad, closeEmoji]);
 
   const handlePinPress = useCallback(() => {
     if (!pins.length) return;
@@ -483,11 +528,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
 
   return (
     <GestureHandlerRootView style={[styles.container, chatTheme && { backgroundColor: '#0a0a1a' }]}>
-      <KeyboardAvoidingView
-        style={styles.content}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={0}
-      >
+      <Animated.View style={[styles.content, { paddingBottom: bottomPad }]}>
         {/* Header */}
         <BlurView intensity={60} tint="dark" style={styles.header}>
           <TouchableOpacity onPress={onBack} style={styles.headerBtn} activeOpacity={0.6}>
@@ -670,15 +711,6 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
           )}
         </View>
 
-        {/* Emoji panel */}
-        <Animated.View style={{ height: emojiHeight, overflow: 'hidden' }}>
-          <EmojiPanel
-            onEmoji={(e) => setText(t => t + e)}
-            onSticker={(s) => { closeEmoji(); sendSticker(chatId, user, s); }}
-            onAnimSticker={(id) => { closeEmoji(); sendAnimSticker(chatId, user, id); }}
-          />
-        </Animated.View>
-
         <ReactionPicker
           visible={pickerVisible}
           onClose={() => setPickerVisible(false)}
@@ -720,7 +752,22 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
             onCancel={() => setVideoRecording(false)}
           />
         )}
-      </KeyboardAvoidingView>
+      </Animated.View>
+
+      {/* Emoji panel: absolute at bottom, slides up via translateY (native driver) */}
+      <Animated.View
+        pointerEvents={emojiOpen ? 'auto' : 'none'}
+        style={[
+          styles.emojiPanelAbs,
+          { height: EMOJI_PANEL_HEIGHT, transform: [{ translateY: emojiTranslate }] },
+        ]}
+      >
+        <EmojiPanel
+          onEmoji={(e) => setText(t => t + e)}
+          onSticker={(s) => { closeEmoji(); sendSticker(chatId, user, s); }}
+          onAnimSticker={(id) => { closeEmoji(); sendAnimSticker(chatId, user, id); }}
+        />
+      </Animated.View>
     </GestureHandlerRootView>
   );
 }
@@ -728,6 +775,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
   content: { flex: 1 },
+  emojiPanelAbs: { position: 'absolute', left: 0, right: 0, bottom: 0 },
 
   header: {
     flexDirection: 'row', alignItems: 'center',
