@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { IconPhone } from './Icons';
+import { IconPhone, IconVideoCamera } from './Icons';
 import { startCall } from '../services/CallManager';
 import type { Message } from '../managers/ChatManager';
 
@@ -9,31 +9,35 @@ type Props = {
 };
 
 function buildText(m: Message): { text: string; red: boolean } {
-  if (m.missed) return { text: 'Пропущенный вызов', red: true };
+  const isVideo = !!m.callVideo;
+  const kind = isVideo ? 'видеовызов' : 'звонок';
+  if (m.missed) return { text: isVideo ? 'Пропущенный видеовызов' : 'Пропущенный вызов', red: true };
   if (m.callDur) {
     const dir = m.callDir === 'out' ? 'Исходящий' : 'Входящий';
-    return { text: `${dir} звонок · ${m.callDur}`, red: false };
+    return { text: `${dir} ${kind} · ${m.callDur}`, red: false };
   }
-  // Без длительности: используем message.text если он есть
   if (m.text) {
     const red = m.text.includes('Отклонённый') || m.text.includes('Нет ответа') ||
                 m.text.includes('Занят') || m.text.includes('Отменённый');
     return { text: m.text, red };
   }
-  return { text: 'Звонок', red: false };
+  return { text: isVideo ? 'Видеовызов' : 'Звонок', red: false };
 }
 
 export default function CallBubble({ message, peer }: Props) {
   const { text, red } = buildText(message);
+  const isVideo = !!message.callVideo;
   return (
     <TouchableOpacity
-      onPress={() => startCall(peer).catch(() => {})}
+      onPress={() => startCall(peer, isVideo).catch(() => {})}
       activeOpacity={0.75}
       style={styles.wrap}
     >
       <View style={[styles.bubble, red && styles.bubbleRed]}>
         <View style={[styles.iconCircle, red && styles.iconCircleRed]}>
-          <IconPhone size={16} color={red ? '#E85D75' : '#4892f7'} />
+          {isVideo
+            ? <IconVideoCamera size={16} color={red ? '#E85D75' : '#4892f7'} />
+            : <IconPhone size={16} color={red ? '#E85D75' : '#4892f7'} />}
         </View>
         <Text style={[styles.text, red && styles.textRed]} numberOfLines={1}>{text}</Text>
       </View>

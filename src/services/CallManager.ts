@@ -1,5 +1,5 @@
 // CallManager — порт web-source/modules/CallManager.js на React Native
-// WebRTC + Firebase signaling. Только аудио (видео — v4.9.0).
+// WebRTC + Firebase signaling. Аудио (v4.8.0) + видео (v4.10.0).
 
 import {
   RTCPeerConnection,
@@ -29,6 +29,8 @@ const ICE = {
 export type CallRole = 'caller' | 'callee';
 export type CallState = 'idle' | 'outgoing' | 'incoming' | 'active';
 
+export type CameraFacing = 'user' | 'environment';
+
 export type CallSnapshot = {
   state: CallState;
   peer: string | null;
@@ -37,12 +39,20 @@ export type CallSnapshot = {
   muted: boolean;
   speaker: boolean;
   callId: string | null;
+  video: boolean;                  // это видеозвонок?
+  cameraOn: boolean;               // моя камера включена (в активном видеозвонке может быть выключена)
+  remoteVideoOn: boolean;          // камера пира активна (track не muted)
+  cameraFacing: CameraFacing;      // фронтальная или тыльная
+  swapped: boolean;                // PIP и fullscreen поменяны местами
+  localStreamURL: string | null;   // streamURL для RTCView
+  remoteStreamURL: string | null;
 };
 
 type Listener = (s: CallSnapshot) => void;
 
 let pc: RTCPeerConnection | null = null;
 let stream: MediaStream | null = null;
+let remoteStream: MediaStream | null = null;
 let callId: string | null = null;
 let role: CallRole | null = null;
 let peer: string | null = null;
@@ -51,23 +61,37 @@ let state: CallState = 'idle';
 let muted = false;
 let speaker = true;
 let durationSec = 0;
+let video = false;
+let cameraOn = true;
+let remoteVideoOn = true;
+let cameraFacing: CameraFacing = 'user';
+let swapped = false;
 let timerInt: ReturnType<typeof setInterval> | null = null;
 let globalListenerStarted = false;
 const listeners = new Set<Listener>();
 
+function snapshot(): CallSnapshot {
+  return {
+    state, peer, role, durationSec, muted, speaker, callId,
+    video, cameraOn, remoteVideoOn, cameraFacing, swapped,
+    localStreamURL: stream ? (stream as any).toURL() : null,
+    remoteStreamURL: remoteStream ? (remoteStream as any).toURL() : null,
+  };
+}
+
 function emit() {
-  const snap: CallSnapshot = { state, peer, role, durationSec, muted, speaker, callId };
+  const snap = snapshot();
   listeners.forEach((l) => l(snap));
 }
 
 export function subscribeCall(l: Listener): () => void {
   listeners.add(l);
-  l({ state, peer, role, durationSec, muted, speaker, callId });
+  l(snapshot());
   return () => { listeners.delete(l); };
 }
 
 export function getCallSnapshot(): CallSnapshot {
-  return { state, peer, role, durationSec, muted, speaker, callId };
+  return snapshot();
 }
 
 function gci(a: string, b: string): string {
@@ -90,8 +114,21 @@ async function setupPC(s: MediaStream) {
 
   // @ts-ignore (event types from react-native-webrtc)
   pc.addEventListener('track', (e: any) => {
-    // На native attach аудио треков выполняется автоматически через peer connection,
-    // InCallManager управляет аудио-маршрутом (speaker/earpiece).
+    // Сохраняем remote stream для RTCView и отслеживаем состояние камеры пира.
+    const rs: MediaStream | undefined = e.streams && e.streams[0];
+    if (rs) {
+      remoteStream = rs;
+      // Если среди треков есть видео — слушаем его mute/unmute для remoteVideoOn
+      const vt = rs.getVideoTracks && rs.getVideoTracks()[0];
+      if (vt) {
+        remoteVideoOn = !vt.muted;
+        // @ts-ignore — поля mute/unmute у MediaStreamTrack через addEventListener
+        vt.addEventListener('mute', () => { remoteVideoOn = false; emit(); });
+        // @ts-ignore
+        vt.addEventListener('unmute', () => { remoteVideoOn = true; emit(); });
+      }
+      emit();
+    }
   });
 
   // @ts-ignore
@@ -105,9 +142,15 @@ async function setupPC(s: MediaStream) {
   });
 }
 
-async function getMicStream(): Promise<MediaStream> {
+async function getMediaStream(withVideo: boolean, facing: CameraFacing = 'user'): Promise<MediaStream> {
+  const constraints: any = { audio: true };
+  if (withVideo) {
+    constraints.video = { facingMode: facing, width: 320, height: 240 };
+  } else {
+    constraints.video = false;
+  }
   // @ts-ignore — react-native-webrtc returns MediaStream
-  return await mediaDevices.getUserMedia({ audio: true, video: false });
+  return await mediaDevices.getUserMedia(constraints);
 }
 
 export function init(currentUser: string) {
@@ -144,7 +187,12 @@ function handleIncoming(cid: string, data: any) {
   peer = data.from;
   role = 'callee';
   muted = false;
-  speaker = true;
+  video = !!data.video;
+  speaker = video; // видеозвонок — громкая связь
+  cameraOn = video;
+  remoteVideoOn = true;
+  cameraFacing = 'user';
+  swapped = false;
   durationSec = 0;
   emit();
   playRingtone(data.from);
@@ -159,7 +207,7 @@ function handleIncoming(cid: string, data: any) {
   });
 }
 
-export async function startCall(target: string) {
+export async function startCall(target: string, withVideo: boolean = false) {
   if (state !== 'idle') return;
   if (!me) throw new Error('CallManager not initialized');
   if (target === me) throw new Error('Нельзя позвонить самому себе');
@@ -168,18 +216,24 @@ export async function startCall(target: string) {
   peer = target;
   role = 'caller';
   muted = false;
-  speaker = true;
+  speaker = withVideo; // видеозвонок по умолчанию на громкой связи
   durationSec = 0;
+  video = withVideo;
+  cameraOn = withVideo;
+  remoteVideoOn = true;
+  cameraFacing = 'user';
+  swapped = false;
   callId = `${me}__to__${target}__${Date.now()}`;
   emit();
 
   try {
-    InCallManager.start({ media: 'audio' });
-    InCallManager.setForceSpeakerphoneOn(false);
+    InCallManager.start({ media: withVideo ? 'video' : 'audio' });
+    InCallManager.setForceSpeakerphoneOn(withVideo);
     playRingbackTone();
 
-    stream = await getMicStream();
+    stream = await getMediaStream(withVideo, cameraFacing);
     await setupPC(stream);
+    emit(); // обновить localStreamURL
 
     const cRef = ref(db, 'calls/' + callId);
 
@@ -199,7 +253,7 @@ export async function startCall(target: string) {
       to: target,
       offer: { type: offer.type, sdp: offer.sdp },
       status: 'ringing',
-      video: false,
+      video: withVideo,
       ts: serverTimestamp(),
     });
 
@@ -257,11 +311,12 @@ export async function acceptCall() {
   if (state !== 'incoming' || !callId) return;
   stopRingtone();
   try {
-    InCallManager.start({ media: 'audio' });
-    InCallManager.setForceSpeakerphoneOn(false);
+    InCallManager.start({ media: video ? 'video' : 'audio' });
+    InCallManager.setForceSpeakerphoneOn(video);
 
-    stream = await getMicStream();
+    stream = await getMediaStream(video, cameraFacing);
     await setupPC(stream);
+    emit();
 
     // @ts-ignore
     pc!.addEventListener('icecandidate', (e: any) => {
@@ -326,22 +381,23 @@ async function writeChatHistory(reason?: string) {
   if (!peer || !me) return;
   const cid = gci(me, peer);
   let text = '';
-  let extra: any = {};
+  let extra: any = { callVideo: video };
   if (durationSec > 0) {
     const m = Math.floor(durationSec / 60);
     const s = durationSec % 60;
     const dur = m > 0 ? `${m}:${s < 10 ? '0' : ''}${s}` : `0:${s < 10 ? '0' : ''}${s}`;
-    text = `${role === 'caller' ? 'Исходящий' : 'Входящий'} звонок ${dur}`;
-    extra = { callDir: role === 'caller' ? 'out' : 'in', callDur: dur };
+    const prefix = role === 'caller' ? 'Исходящий' : 'Входящий';
+    text = video ? `${prefix} видеовызов ${dur}` : `${prefix} звонок ${dur}`;
+    extra = { ...extra, callDir: role === 'caller' ? 'out' : 'in', callDur: dur };
   } else if (role === 'callee') {
-    text = 'Пропущенный вызов';
-    extra = { callDir: 'in', missed: true };
+    text = video ? 'Пропущенный видеовызов' : 'Пропущенный вызов';
+    extra = { ...extra, callDir: 'in', missed: true };
   } else if (role === 'caller') {
-    if (reason === 'declined') text = 'Отклонённый вызов';
+    if (reason === 'declined') text = video ? 'Отклонённый видеовызов' : 'Отклонённый вызов';
     else if (reason === 'busy') text = 'Абонент занят';
     else if (reason === 'noanswer') text = 'Нет ответа';
-    else text = 'Отменённый вызов';
-    extra = { callDir: 'out' };
+    else text = video ? 'Отменённый видеовызов' : 'Отменённый вызов';
+    extra = { ...extra, callDir: 'out' };
   }
   if (!text) return;
   try {
@@ -362,6 +418,7 @@ function cleanup(opts: { writeChat: boolean; reason?: string }) {
   if (opts.writeChat) writeChatHistory(opts.reason);
   if (pc) { try { pc.close(); } catch {} pc = null; }
   if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
+  remoteStream = null;
   if (callId) {
     off(ref(db, 'calls/' + callId + '/answer'));
     off(ref(db, 'calls/' + callId + '/callerIce'));
@@ -376,6 +433,11 @@ function cleanup(opts: { writeChat: boolean; reason?: string }) {
   muted = false;
   speaker = true;
   durationSec = 0;
+  video = false;
+  cameraOn = true;
+  remoteVideoOn = true;
+  cameraFacing = 'user';
+  swapped = false;
   emit();
 }
 
@@ -389,5 +451,37 @@ export function toggleMute() {
 export function toggleSpeaker() {
   speaker = !speaker;
   try { InCallManager.setForceSpeakerphoneOn(speaker); } catch {}
+  emit();
+}
+
+// — Видео: вкл/выкл локальной камеры —
+export function toggleCamera() {
+  if (!stream || !video) return;
+  cameraOn = !cameraOn;
+  stream.getVideoTracks().forEach((t) => { t.enabled = cameraOn; });
+  emit();
+}
+
+// — Видео: переключение фронтальная ↔ тыльная —
+// Специфичный API react-native-webrtc: track._switchCamera() переключает на месте.
+export function flipCamera() {
+  if (!stream || !video) return;
+  const vt = stream.getVideoTracks()[0];
+  if (!vt) return;
+  try {
+    // @ts-ignore — _switchCamera есть у react-native-webrtc MediaStreamTrack
+    if (typeof vt._switchCamera === 'function') {
+      // @ts-ignore
+      vt._switchCamera();
+      cameraFacing = cameraFacing === 'user' ? 'environment' : 'user';
+      emit();
+    }
+  } catch {}
+}
+
+// — Видео: swap PIP ↔ fullscreen —
+export function swapVideos() {
+  if (!video || state !== 'active') return;
+  swapped = !swapped;
   emit();
 }

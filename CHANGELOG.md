@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## v4.10.0 (2026-04-24) — Видеозвонки
+
+**Фича:** полноценные видеозвонки поверх существующего WebRTC-аудиозвонка. Исходящий с превью своей камеры, активный с fullscreen + PIP и drag/swap, вход в видеозвонок из шапки чата и меню.
+
+**Что сделано:**
+- `src/services/CallManager.ts` — расширен снапшот (`video`, `cameraOn`, `remoteVideoOn`, `cameraFacing`, `swapped`, `localStreamURL`, `remoteStreamURL`). `getMediaStream(withVideo, facing)` с видео-констрейнтами. Новые методы `toggleCamera`, `flipCamera` (через `track._switchCamera()`), `swapVideos`. `startCall` принимает флаг `withVideo`, пишет его в RTDB `/calls/{cid}/video`. `handleIncoming` читает тип вызова. `writeChatHistory` помечает `callVideo: true` и пишет «видеовызов» в превью.
+- `src/screens/CallScreen.tsx` — полный ре-дизайн под видео:
+  - RTCView fullscreen (удалённое видео или локальное при swap) + PIP 120×160.
+  - PIP draggable через `PanResponder`, тап по PIP = swap ролей.
+  - Три режима: outgoing video (fullscreen своя камера + top overlay), active video (RTCView + PIP + top-bar с именем/таймером), audio/incoming (градиент + кольца + аватар).
+  - Fallback-оверлей с аватаром когда пир выключил камеру.
+  - Панель кнопок закреплена абсолютно внизу во всех режимах (в active video добавились `flip` и `toggleCamera`).
+- `src/screens/ChatScreen.tsx` — в шапке приватного чата добавлена кнопка 📞 (→ аудиозвонок). Кнопка ⋮ теперь открывает popup-меню (вместо прямого theme-picker).
+- `src/components/ChatMenu.tsx` — новый компонент popup-меню верх-справа (как в вебе): «Видеозвонок» (→ `startCall(peer, true)`), «Изменить обои» (→ theme picker). Видео-пункт скрыт для групп.
+- `src/screens/UserProfileScreen.tsx` — кнопка «Видео» вызывает `startCall(username, true)`.
+- `src/components/CallBubble.tsx` + `src/managers/ChatManager.ts` — в истории вызовов текст «Пропущенный видеовызов» / «Входящий видеовызов» + иконка камеры. Redial с тем же типом.
+- `src/components/Icons.tsx` — добавлены `IconBell`, `IconBellOff`, `IconWallpaper`.
+
 ## v4.9.1 (2026-04-24) — Плавные анимации клавиатуры и панели эмодзи
 
 **Баги:**

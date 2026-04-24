@@ -274,3 +274,32 @@ export function IconCallHangup({ size = 24, color = '#fff' }: IconProps) {
     </Svg>
   );
 }
+
+export function IconBell({ size = 18, color = '#fff' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Polygon points="11 5 6 9 2 9 2 15 6 15 11 19" stroke={color} strokeWidth={s} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M19.07 4.93a10 10 0 0 1 0 14.14" stroke={color} strokeWidth={s} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+export function IconBellOff({ size = 18, color = '#fff' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Polygon points="11 5 6 9 2 9 2 15 6 15 11 19" stroke={color} strokeWidth={s} strokeLinecap="round" strokeLinejoin="round" />
+      <Line x1="23" y1="9" x2="17" y2="15" stroke={color} strokeWidth={s} strokeLinecap="round" />
+      <Line x1="17" y1="9" x2="23" y2="15" stroke={color} strokeWidth={s} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+export function IconWallpaper({ size = 18, color = '#fff' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x="3" y="3" width="18" height="18" rx="2" stroke={color} strokeWidth={s} />
+      <Circle cx="8.5" cy="8.5" r="1.5" stroke={color} strokeWidth={s} />
+      <Polyline points="21 15 16 10 5 21" stroke={color} strokeWidth={s} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}

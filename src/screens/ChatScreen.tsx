@@ -18,7 +18,9 @@ import ForwardModal from '../components/ForwardModal';
 import PinBar from '../components/PinBar';
 import ThemePicker from '../components/ThemePicker';
 import * as Clipboard from 'expo-clipboard';
-import { IconBack, IconSmile, IconPaperclip, IconMic, IconSend, IconVideoNote, IconReplyBar, IconClose, IconCtxEdit, IconCheck } from '../components/Icons';
+import { IconBack, IconSmile, IconPaperclip, IconMic, IconSend, IconVideoNote, IconReplyBar, IconClose, IconCtxEdit, IconCheck, IconPhone } from '../components/Icons';
+import ChatMenu, { type ChatMenuAction } from '../components/ChatMenu';
+import { startCall } from '../services/CallManager';
 import VideoRecorder from '../components/VideoRecorder';
 import { sendVideoMsg, editMessage, deleteMessage, forwardMessage } from '../managers/ChatManager';
 import EmojiPanel from '../components/EmojiPanel';
@@ -74,6 +76,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [chatTheme, setChatThemeState] = useState<ChatTheme | null>(null);
   const [themePickerOpen, setThemePickerOpen] = useState(false);
+  const [chatMenuOpen, setChatMenuOpen] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const isNearBottomRef = useRef(true);
   const pinIndexRef = useRef(0);
@@ -453,6 +456,15 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
     await setChatTheme(chatId, t);
   }, [chatId]);
 
+  const handleChatMenuPick = useCallback((action: ChatMenuAction) => {
+    setChatMenuOpen(false);
+    if (action === 'videoCall') {
+      startCall(chatName, true).catch(() => {});
+    } else if (action === 'wallpaper') {
+      setThemePickerOpen(true);
+    }
+  }, [chatName]);
+
   const isGeneralChat = chatId === 'general';
   const [otherPresence, setOtherPresence] = useState<PresenceState | null>(null);
   useEffect(() => {
@@ -569,9 +581,20 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
               )}
             </View>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.headerBtn} activeOpacity={0.6} onPress={() => setThemePickerOpen(v => !v)}>
-            <Text style={styles.menuDots}>⋮</Text>
-          </TouchableOpacity>
+          {!isGeneralChat && !isGroup && (
+            <TouchableOpacity
+              style={styles.headerBtn}
+              activeOpacity={0.6}
+              onPress={() => startCall(chatName, false).catch(() => {})}
+            >
+              <IconPhone size={20} color={theme.text} />
+            </TouchableOpacity>
+          )}
+          {!isGeneralChat && (
+            <TouchableOpacity style={styles.headerBtn} activeOpacity={0.6} onPress={() => setChatMenuOpen(true)}>
+              <Text style={styles.menuDots}>⋮</Text>
+            </TouchableOpacity>
+          )}
         </BlurView>
 
         {/* Pin bar */}
@@ -742,6 +765,14 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
             current={chatTheme}
             onSelect={handleThemeSelect}
             onClose={() => setThemePickerOpen(false)}
+          />
+        )}
+
+        {chatMenuOpen && (
+          <ChatMenu
+            canVideoCall={!isGeneralChat && !isGroup}
+            onPick={handleChatMenuPick}
+            onClose={() => setChatMenuOpen(false)}
           />
         )}
 
