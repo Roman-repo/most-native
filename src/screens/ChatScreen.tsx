@@ -4,6 +4,7 @@ import {
   FlatList, Platform, Animated, Easing, Keyboard, Vibration, Alert,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
+import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, Easing as REasing } from 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -18,6 +19,7 @@ import ForwardModal, { type ForwardTarget } from '../components/ForwardModal';
 import PinBar from '../components/PinBar';
 import ThemePicker from '../components/ThemePicker';
 import * as Clipboard from 'expo-clipboard';
+import * as Haptics from 'expo-haptics';
 import { IconBack, IconSmile, IconPaperclip, IconMic, IconSend, IconVideoNote, IconReplyBar, IconClose, IconCtxEdit, IconCheck, IconPhone } from '../components/Icons';
 import ChatMenu, { type ChatMenuAction } from '../components/ChatMenu';
 import Toast from '../components/Toast';
@@ -116,7 +118,8 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
 
   // — Emoji / keyboard animation —
   const emojiTranslate = useRef(new Animated.Value(EMOJI_PANEL_HEIGHT)).current; // hidden below by default
-  const bottomPad = useRef(new Animated.Value(0)).current; // shared: keyboard OR emoji
+  const bottomPad = useSharedValue(0); // shared: keyboard OR emoji — Reanimated for UI-thread layout anim
+  const contentAnimStyle = useAnimatedStyle(() => ({ paddingBottom: bottomPad.value }));
   const emojiAnimating = useRef(false);
   const emojiOpenRef = useRef(false);
   const kbHeightRef = useRef(0);
@@ -165,14 +168,10 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
     emojiOpenRef.current = true;
     Keyboard.dismiss();
     setEmojiOpen(true);
-    Animated.parallel([
-      Animated.timing(emojiTranslate, {
-        toValue: 0, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: true,
-      }),
-      Animated.timing(bottomPad, {
-        toValue: EMOJI_PANEL_HEIGHT, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: false,
-      }),
-    ]).start(() => { emojiAnimating.current = false; });
+    bottomPad.value = withTiming(EMOJI_PANEL_HEIGHT, { duration: 280, easing: REasing.out(REasing.cubic) });
+    Animated.timing(emojiTranslate, {
+      toValue: 0, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+    }).start(() => { emojiAnimating.current = false; });
   }, [emojiTranslate, bottomPad]);
 
   const closeEmoji = useCallback(() => {
@@ -180,14 +179,10 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
     emojiAnimating.current = true;
     emojiOpenRef.current = false;
     const targetPad = kbHeightRef.current; // keyboard may be about to show
-    Animated.parallel([
-      Animated.timing(emojiTranslate, {
-        toValue: EMOJI_PANEL_HEIGHT, duration: 240, easing: Easing.in(Easing.cubic), useNativeDriver: true,
-      }),
-      Animated.timing(bottomPad, {
-        toValue: targetPad, duration: 240, easing: Easing.in(Easing.cubic), useNativeDriver: false,
-      }),
-    ]).start(() => { emojiAnimating.current = false; setEmojiOpen(false); });
+    bottomPad.value = withTiming(targetPad, { duration: 240, easing: REasing.in(REasing.cubic) });
+    Animated.timing(emojiTranslate, {
+      toValue: EMOJI_PANEL_HEIGHT, duration: 240, easing: Easing.in(Easing.cubic), useNativeDriver: true,
+    }).start(() => { emojiAnimating.current = false; setEmojiOpen(false); });
   }, [emojiTranslate, bottomPad]);
 
   // — Smooth keyboard tracking (replaces KeyboardAvoidingView) —
@@ -203,17 +198,13 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
         return;
       }
       const dur = Platform.OS === 'ios' ? (e.duration || 250) : 240;
-      Animated.timing(bottomPad, {
-        toValue: h, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false,
-      }).start();
+      bottomPad.value = withTiming(h, { duration: dur, easing: REasing.out(REasing.cubic) });
     });
     const hideSub = Keyboard.addListener(hideEvt, (e) => {
       kbHeightRef.current = 0;
       if (emojiOpenRef.current) return; // emoji is managing bottomPad
       const dur = Platform.OS === 'ios' ? (e.duration || 250) : 200;
-      Animated.timing(bottomPad, {
-        toValue: 0, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false,
-      }).start();
+      bottomPad.value = withTiming(0, { duration: dur, easing: REasing.out(REasing.cubic) });
     });
     return () => { showSub.remove(); hideSub.remove(); };
   }, [bottomPad, closeEmoji]);
@@ -363,6 +354,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
     stopTyping(chatId, user);
     const reply = replyTo;
     setReplyTo(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     await sendMessage(chatId, user, t, reply ?? undefined);
   }, [text, chatId, user, replyTo]);
 
@@ -560,7 +552,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
 
   return (
     <GestureHandlerRootView style={[styles.container, chatTheme && { backgroundColor: '#0a0a1a' }]}>
-      <Animated.View style={[styles.content, { paddingBottom: bottomPad }]}>
+      <Reanimated.View style={[styles.content, contentAnimStyle]}>
         {/* Header */}
         <BlurView intensity={60} tint="dark" style={styles.header}>
           <TouchableOpacity onPress={onBack} style={styles.headerBtn} activeOpacity={0.6}>
@@ -618,9 +610,11 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
         </BlurView>
 
         {/* Pin bar */}
-        <View style={styles.pinBarWrap}>
-          <PinBar pins={pins} onPress={handlePinPress} />
-        </View>
+        {pins && pins.length > 0 && (
+          <BlurView intensity={60} tint="dark" style={styles.pinBarWrap}>
+            <PinBar pins={pins} onPress={handlePinPress} />
+          </BlurView>
+        )}
 
         {/* Messages + reply bar (absolute поверх списка) */}
         <Animated.View style={[styles.listWrap, { opacity: listOpacity }]}>
@@ -650,7 +644,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
         </Animated.View>
 
         {editMsg && (
-          <View style={styles.editBar}>
+          <BlurView intensity={60} tint="dark" style={styles.editBar}>
             <IconCtxEdit size={28} color={theme.accent} />
             <View style={styles.editBarContent}>
               <Text style={styles.editBarLabel}>Редактирование</Text>
@@ -659,11 +653,11 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
             <TouchableOpacity onPress={handleEditCancel} style={styles.editBarClose}>
               <IconClose size={16} color={theme.text2} />
             </TouchableOpacity>
-          </View>
+          </BlurView>
         )}
 
         {replyTo && (
-          <View style={styles.replyBar}>
+          <BlurView intensity={60} tint="dark" style={styles.replyBar}>
             <View style={styles.replyBarIcon}>
               <IconReplyBar size={18} color={theme.accent} />
             </View>
@@ -674,7 +668,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
             <TouchableOpacity onPress={() => setReplyTo(null)} style={styles.replyBarClose}>
               <IconClose size={16} color={theme.text2} />
             </TouchableOpacity>
-          </View>
+          </BlurView>
         )}
 
         {/* Input bar — always rendered. TextInput stays mounted to keep keyboard open during recording. */}
@@ -810,7 +804,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
             onCancel={() => setVideoRecording(false)}
           />
         )}
-      </Animated.View>
+      </Reanimated.View>
 
       {/* Emoji panel: absolute at bottom, slides up via translateY (native driver) */}
       <Animated.View
@@ -841,7 +835,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: theme.border, overflow: 'hidden',
   },
   menuDots: { fontSize: 22, color: theme.text, lineHeight: 26 },
-  pinBarWrap: { overflow: 'hidden', backgroundColor: 'rgba(15,12,41,0.82)' },
+  pinBarWrap: { overflow: 'hidden' },
   headerBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 0 },
   headerAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
@@ -864,7 +858,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 8,
     borderTopWidth: 1, borderTopColor: theme.border,
     gap: 8,
-    backgroundColor: 'rgba(15,12,41,0.82)',
+    overflow: 'hidden',
   },
   editBarContent: { flex: 1, minWidth: 0 },
   editBarLabel: { fontSize: 13, color: theme.accent, fontWeight: '700', marginBottom: 1 },
@@ -877,7 +871,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 8,
     borderTopWidth: 1, borderTopColor: theme.border,
     gap: 8,
-    backgroundColor: 'rgba(15,12,41,0.82)',
+    overflow: 'hidden',
   },
   replyBarIcon: { flexShrink: 0, alignItems: 'center', justifyContent: 'center' },
   replyBarContent: { flex: 1, minWidth: 0 },

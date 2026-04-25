@@ -6,6 +6,7 @@ import { IconPlay, IconPause } from './Icons';
 import CallBubble from './CallBubble';
 import { base64ToTempFile } from '../managers/MediaManager';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
+import * as Haptics from 'expo-haptics';
 import { SvgXml } from 'react-native-svg';
 import { theme } from '../styles/theme';
 import { ANIM_STICKERS } from '../utils/emoji';
@@ -232,6 +233,7 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
     }
     if (state === State.END || state === State.CANCELLED || state === State.FAILED) {
       if (translationX >= SWIPE_THRESHOLD) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
         onReply(m);
       }
       Animated.parallel([
@@ -266,7 +268,7 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
         </Animated.View>
 
         <Animated.View style={{ transform: [{ translateX: clampedTranslate }] }}>
-          <TouchableOpacity activeOpacity={0.85} delayLongPress={400} onLongPress={() => onLongPress(m)}>
+          <TouchableOpacity activeOpacity={0.85} delayLongPress={400} onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); onLongPress(m); }}>
             {showSender && !isMe && (
               <Text style={[styles.senderName, { color: senderColor(m.sender) }]}>{m.sender}</Text>
             )}
