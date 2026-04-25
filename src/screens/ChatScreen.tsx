@@ -51,6 +51,7 @@ type Props = {
   onOpenPrivate?: (otherUser: string) => void;
   onOpenProfile?: (otherUser: string) => void;
   onNavigateToChat?: (chatId: string, chatName: string, isGroup: boolean) => void;
+  onOpenGallery?: (images: string[], index: number) => void;
 };
 
 type ReplyInfo = { sender: string; text: string };
@@ -63,7 +64,7 @@ function getAvatarColor(name: string): string {
 }
 
 
-export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, onOpenPrivate, onOpenProfile, onNavigateToChat }: Props) {
+export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, onOpenPrivate, onOpenProfile, onNavigateToChat, onOpenGallery }: Props) {
   const insets = useSafeAreaInsets();
   const inbBottomPad = Platform.OS === 'android' ? 6 : Math.max(insets.bottom, 20);
   // — Chat state —
@@ -522,6 +523,14 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
     return map;
   }, [messages, isGroup, isGeneralChat]);
 
+  const handleImagePress = useCallback((url: string) => {
+    if (!onOpenGallery) return;
+    const images: string[] = [];
+    for (const m of messages) if (m.image) images.push(m.image);
+    const idx = images.indexOf(url);
+    if (idx >= 0) onOpenGallery(images, idx);
+  }, [messages, onOpenGallery]);
+
   const renderItem = useCallback(({ item, index }: { item: Message; index: number }) => (
     <MessageBubble
       message={item}
@@ -531,10 +540,11 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
       onLongPress={handleLongPress}
       onReactionPress={handleReactionPress}
       onReply={handleReply}
+      onImagePress={handleImagePress}
       bubbleColor={chatTheme?.acc}
       peer={!isGroup && !isGeneralChat ? chatName : undefined}
     />
-  ), [user, showSenderMap, handleLongPress, handleReactionPress, handleReply, chatTheme, maxOtherReadTs, isGroup, isGeneralChat, chatName]);
+  ), [user, showSenderMap, handleLongPress, handleReactionPress, handleReply, handleImagePress, chatTheme, maxOtherReadTs, isGroup, isGeneralChat, chatName]);
 
   const keyExtractor = useCallback((item: Message) => item._key, []);
 
