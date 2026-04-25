@@ -1,63 +1,78 @@
+import { useEffect, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { BottomSheetModal, BottomSheetView, BottomSheetBackdrop, type BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
 import { theme } from '../styles/theme';
 import { CHAT_THEMES, type ChatTheme } from '../utils/chatThemes';
 
 type Props = {
+  visible: boolean;
   current: ChatTheme | null;
   onSelect: (t: ChatTheme | null) => void;
   onClose: () => void;
 };
 
-export default function ThemePicker({ current, onSelect, onClose }: Props) {
+export default function ThemePicker({ visible, current, onSelect, onClose }: Props) {
+  const ref = useRef<BottomSheetModal>(null);
+
+  useEffect(() => {
+    if (visible) ref.current?.present();
+    else ref.current?.dismiss();
+  }, [visible]);
+
+  const renderBackdrop = useCallback(
+    (props: BottomSheetBackdropProps) => (
+      <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} pressBehavior="close" />
+    ),
+    [],
+  );
+
   return (
-    <View style={styles.panel}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Тема чата</Text>
-        <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-          <Text style={styles.closeText}>✕</Text>
-        </TouchableOpacity>
-      </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.list}>
-        <TouchableOpacity
-          style={[styles.card, !current && styles.cardActive]}
-          onPress={() => onSelect(null)}
-        >
-          <View style={[styles.preview, { backgroundColor: '#667eea' }]} />
-          <Text style={styles.cardLabel}>По умолчанию</Text>
-        </TouchableOpacity>
-        {CHAT_THEMES.map((t) => (
+    <BottomSheetModal
+      ref={ref}
+      enableDynamicSizing
+      onDismiss={onClose}
+      backdropComponent={renderBackdrop}
+      backgroundStyle={styles.bg}
+      handleIndicatorStyle={styles.handle}
+    >
+      <BottomSheetView style={styles.panel}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Тема чата</Text>
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.list}>
           <TouchableOpacity
-            key={t.id}
-            style={[styles.card, current?.id === t.id && styles.cardActive]}
-            onPress={() => onSelect(t)}
+            style={[styles.card, !current && styles.cardActive]}
+            onPress={() => onSelect(null)}
           >
-            <View style={[styles.preview, { backgroundColor: t.acc }]} />
-            <Text style={styles.cardEmoji}>{t.emoji}</Text>
-            <Text style={styles.cardLabel}>{t.name}</Text>
+            <View style={[styles.preview, { backgroundColor: '#667eea' }]} />
+            <Text style={styles.cardLabel}>По умолчанию</Text>
           </TouchableOpacity>
-        ))}
-      </ScrollView>
-    </View>
+          {CHAT_THEMES.map((t) => (
+            <TouchableOpacity
+              key={t.id}
+              style={[styles.card, current?.id === t.id && styles.cardActive]}
+              onPress={() => onSelect(t)}
+            >
+              <View style={[styles.preview, { backgroundColor: t.acc }]} />
+              <Text style={styles.cardEmoji}>{t.emoji}</Text>
+              <Text style={styles.cardLabel}>{t.name}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </BottomSheetView>
+    </BottomSheetModal>
   );
 }
 
 const styles = StyleSheet.create({
-  panel: {
-    backgroundColor: 'rgba(15,12,41,0.97)',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.1)',
-    paddingBottom: 24,
-  },
+  bg: { backgroundColor: 'rgba(15,12,41,0.97)' },
+  handle: { backgroundColor: 'rgba(255,255,255,0.3)' },
+  panel: { paddingBottom: 24 },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 8,
   },
   title: { fontSize: 16, fontWeight: '600', color: theme.text },
-  closeBtn: { padding: 4 },
-  closeText: { fontSize: 18, color: theme.text3 },
   list: { paddingHorizontal: 12, gap: 10, alignItems: 'center' },
   card: {
     alignItems: 'center',

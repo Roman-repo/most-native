@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## v4.15.0 (2026-04-25) — Lists & sheets
+
+**Фича:** второй из трёх релизов «Native UX upgrade» — нативные списки и bottom-sheets, плюс архитектурный фикс blur.
+
+**Что сделано:**
+- `@shopify/flash-list` в `src/screens/ChatListScreen.tsx` — `FlatList` заменён на `FlashList` для списка чатов. Убраны `initialNumToRender`/`maxToRenderPerBatch`/`windowSize` (FlashList сам управляет виртуализацией).
+- `@gorhom/bottom-sheet` — `<BottomSheetModalProvider>` добавлен в `App.tsx`. Меню чата (`ChatMenu` — три точки в хедере) и `ThemePicker` (выбор обоев) переписаны на `BottomSheetModal` с `BottomSheetBackdrop`. Выезжают снизу, свайп вниз закрывает.
+- **Архитектурный фикс blur:** `BlurView` физически размывает только то, что находится под ним по z-оси. Хедер, пинбар, плашки ответа и редактирования переведены на `position: absolute` с измерением высот через `onLayout` (`headerH`, `pinH`, `editH`, `replyH`, `inputH`). Список сообщений получил динамический `paddingTop`/`paddingBottom` чтобы первое/последнее сообщение не закрывалось плашками. Теперь blur реально размывает сообщения под плашками.
+- `expo-blur` — добавлен prop `experimentalBlurMethod="dimezisBlurView"` ко всем `BlurView` (4 в `ChatScreen` + 1 в `ReactionPicker`). Известная проблема expo-blur на Android с New Architecture: без этого пропа blur рендерится плоским цветом.
+
+**Что НЕ в этой фиче (вынесено в бэклог):**
+- `FlashList` для списка сообщений в `ChatScreen`. FlashList v2 удалил prop `inverted`, требуется полноценный рефакторинг с `maintainVisibleContentPosition` + transform-трюки. Отдельный релиз.
+
 ## v4.14.0 (2026-04-25) — Native UX upgrade
 
 **Фича:** первый из трёх релизов «Native UX upgrade» — переход на нативные модули для плавного UX. В этом релизе только безопасные изменения без рефакторинга.

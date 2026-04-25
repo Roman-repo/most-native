@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { getSession } from './src/services/auth';
 import { startPresence } from './src/services/presence';
 import { ref, get, set, serverTimestamp } from 'firebase/database';
@@ -117,6 +118,7 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <KeyboardProvider>
       <SafeAreaProvider>
+      <BottomSheetModalProvider>
         <View style={styles.root}>
           <StatusBar style="light" />
 
@@ -195,6 +197,7 @@ export default function App() {
           {/* Call overlay — поверх всего */}
           {user && <CallScreen />}
         </View>
+      </BottomSheetModalProvider>
       </SafeAreaProvider>
       </KeyboardProvider>
     </GestureHandlerRootView>

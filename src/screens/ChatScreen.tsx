@@ -83,6 +83,12 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
   const [themePickerOpen, setThemePickerOpen] = useState(false);
   const [chatMenuOpen, setChatMenuOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  // — Layout heights for absolute-positioned bars (so BlurView overlays the message list) —
+  const [headerH, setHeaderH] = useState(0);
+  const [pinH, setPinH] = useState(0);
+  const [editH, setEditH] = useState(0);
+  const [replyH, setReplyH] = useState(0);
+  const [inputH, setInputH] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const isNearBottomRef = useRef(true);
   const pinIndexRef = useRef(0);
@@ -554,7 +560,11 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
     <GestureHandlerRootView style={[styles.container, chatTheme && { backgroundColor: '#0a0a1a' }]}>
       <Reanimated.View style={[styles.content, contentAnimStyle]}>
         {/* Header */}
-        <BlurView intensity={60} tint="dark" style={styles.header}>
+        <BlurView
+          intensity={60} tint="dark" experimentalBlurMethod="dimezisBlurView"
+          style={[styles.header, styles.headerAbs]}
+          onLayout={(e) => setHeaderH(e.nativeEvent.layout.height)}
+        >
           <TouchableOpacity onPress={onBack} style={styles.headerBtn} activeOpacity={0.6}>
             <IconBack size={22} color={theme.text} />
           </TouchableOpacity>
@@ -611,7 +621,11 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
 
         {/* Pin bar */}
         {pins && pins.length > 0 && (
-          <BlurView intensity={60} tint="dark" style={styles.pinBarWrap}>
+          <BlurView
+            intensity={60} tint="dark" experimentalBlurMethod="dimezisBlurView"
+            style={[styles.pinBarWrap, styles.pinBarAbs, { top: headerH }]}
+            onLayout={(e) => setPinH(e.nativeEvent.layout.height)}
+          >
             <PinBar pins={pins} onPress={handlePinPress} />
           </BlurView>
         )}
@@ -631,7 +645,13 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
             onContentSizeChange={handleContentSizeChange}
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
             style={styles.list}
-            contentContainerStyle={[styles.listContent, replyTo ? { paddingBottom: 60 } : undefined]}
+            contentContainerStyle={[
+              styles.listContent,
+              {
+                paddingTop: 12 + headerH + pinH,
+                paddingBottom: 12 + inputH + (editMsg ? editH : 0) + (replyTo ? replyH : 0),
+              },
+            ]}
             maxToRenderPerBatch={10}
             windowSize={10}
             initialNumToRender={20}
@@ -644,7 +664,11 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
         </Animated.View>
 
         {editMsg && (
-          <BlurView intensity={60} tint="dark" style={styles.editBar}>
+          <BlurView
+            intensity={60} tint="dark" experimentalBlurMethod="dimezisBlurView"
+            style={[styles.editBar, styles.barAbs, { bottom: inputH }]}
+            onLayout={(e) => setEditH(e.nativeEvent.layout.height)}
+          >
             <IconCtxEdit size={28} color={theme.accent} />
             <View style={styles.editBarContent}>
               <Text style={styles.editBarLabel}>Редактирование</Text>
@@ -657,7 +681,11 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
         )}
 
         {replyTo && (
-          <BlurView intensity={60} tint="dark" style={styles.replyBar}>
+          <BlurView
+            intensity={60} tint="dark" experimentalBlurMethod="dimezisBlurView"
+            style={[styles.replyBar, styles.barAbs, { bottom: inputH + (editMsg ? editH : 0) }]}
+            onLayout={(e) => setReplyH(e.nativeEvent.layout.height)}
+          >
             <View style={styles.replyBarIcon}>
               <IconReplyBar size={18} color={theme.accent} />
             </View>
@@ -672,7 +700,10 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
         )}
 
         {/* Input bar — always rendered. TextInput stays mounted to keep keyboard open during recording. */}
-        <View style={[styles.inb, { paddingBottom: inbBottomPad }]}>
+        <View
+          style={[styles.inb, { paddingBottom: inbBottomPad }]}
+          onLayout={(e) => setInputH(e.nativeEvent.layout.height)}
+        >
           <View style={styles.inwWrap}>
             {/* inwNormal — always mounted (keeps TextInput focus & keyboard) */}
             <View style={styles.inw}>
@@ -774,21 +805,19 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
           onPick={handleForwardPick}
         />
 
-        {themePickerOpen && (
-          <ThemePicker
-            current={chatTheme}
-            onSelect={handleThemeSelect}
-            onClose={() => setThemePickerOpen(false)}
-          />
-        )}
+        <ThemePicker
+          visible={themePickerOpen}
+          current={chatTheme}
+          onSelect={handleThemeSelect}
+          onClose={() => setThemePickerOpen(false)}
+        />
 
-        {chatMenuOpen && (
-          <ChatMenu
-            canVideoCall={!isGeneralChat && !isGroup}
-            onPick={handleChatMenuPick}
-            onClose={() => setChatMenuOpen(false)}
-          />
-        )}
+        <ChatMenu
+          visible={chatMenuOpen}
+          canVideoCall={!isGeneralChat && !isGroup}
+          onPick={handleChatMenuPick}
+          onClose={() => setChatMenuOpen(false)}
+        />
 
         <Toast
           message={toastMsg || ''}
@@ -834,6 +863,9 @@ const styles = StyleSheet.create({
     paddingTop: 50, paddingBottom: 8, paddingHorizontal: 10, gap: 8,
     borderBottomWidth: 1, borderBottomColor: theme.border, overflow: 'hidden',
   },
+  headerAbs: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 },
+  pinBarAbs: { position: 'absolute', left: 0, right: 0, zIndex: 9 },
+  barAbs: { position: 'absolute', left: 0, right: 0, zIndex: 9 },
   menuDots: { fontSize: 22, color: theme.text, lineHeight: 26 },
   pinBarWrap: { overflow: 'hidden' },
   headerBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
@@ -849,7 +881,7 @@ const styles = StyleSheet.create({
 
   listWrap: { flex: 1 },
   list: { flex: 1 },
-  listContent: { paddingVertical: 12, gap: 3 },
+  listContent: { gap: 3 },
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60 },
   emptyText: { color: theme.text3, fontSize: 15 },
 

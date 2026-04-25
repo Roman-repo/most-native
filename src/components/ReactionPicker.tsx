@@ -70,7 +70,7 @@ export default function ReactionPicker({
         pointerEvents="box-none"
         style={[styles.anchor, { opacity, transform: [{ scale }, { translateY }] }]}
       >
-        <BlurView intensity={60} tint="dark" style={styles.ctx}>
+        <BlurView intensity={60} tint="dark" experimentalBlurMethod="dimezisBlurView" style={styles.ctx}>
           {/* Быстрые реакции */}
           <View style={styles.qrRow}>
             {QUICK_REACTIONS.map((e) => (
