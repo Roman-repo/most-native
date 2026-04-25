@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## v4.14.0 (2026-04-25) — Native UX upgrade
+
+**Фича:** первый из трёх релизов «Native UX upgrade» — переход на нативные модули для плавного UX. В этом релизе только безопасные изменения без рефакторинга.
+
+**Что сделано:**
+- `expo-haptics` — тактильная отдача: long-press на сообщении (открытие меню реакций), свайп вправо для ответа, отправка сообщения. Импорт в `src/components/MessageBubble.tsx` и `src/screens/ChatScreen.tsx`.
+- `react-native-keyboard-controller` — `<KeyboardProvider>` обёрнут вокруг приложения в `App.tsx`. Подготовка инфраструктуры для нативной обработки клавиатуры (Android-фиксы layout).
+- `expo-blur` в `src/screens/ChatScreen.tsx` — пинбар (`pinBarWrap`), плашка ответа (`replyBar`) и плашка редактирования (`editBar`) переведены с полупрозрачного `backgroundColor` на нативный `<BlurView intensity={60} tint="dark">`. Реальное размытие фона вместо плоского цвета.
+- `react-native-reanimated` для эмодзи-панели — `bottomPad` (общий padding для клавиатуры/эмодзи) переведён с `Animated.Value` (useNativeDriver: false, JS-поток) на `useSharedValue` + `useAnimatedStyle` (UI-поток через worklet). Убраны рывки при выезде эмодзи-панели на Android.
+- Установлены, но **не задействованы** в этом релизе (в APK уже есть, ждут v4.15.0/v4.16.0): `@shopify/flash-list`, `@gorhom/bottom-sheet`, `react-native-mmkv`, `react-native-nitro-modules`, `react-native-pager-view`.
+
+**EAS dev-build:** `02a61f66-5276-42e5-be99-e32c5280ab62` — содержит все 7 нативных модулей.
+
+**Что НЕ в этой фиче (вынесено в бэклог):**
+- `KeyboardStickyView` из `react-native-keyboard-controller` для нативного «прилипания» инпута к клавиатуре. Удалит ~30 строк ручного keyboard tracking в `ChatScreen.tsx`. Предложить при следующей пересборке APK.
+
 ## v4.13.0 (2026-04-24) — Фотогалерея
 
 **Фича:** полноэкранный просмотр фото из чата — pinch-zoom, double-tap zoom, свайп между фото, swipe-down для закрытия. Вход — тап по фото в пузыре или в таб «Медиа» профиля.
