@@ -31,9 +31,10 @@ type Props = {
   username: string;
   chatId: string;
   onBack: () => void;
+  onOpenGallery?: (images: string[], index: number) => void;
 };
 
-export default function UserProfileScreen({ username, chatId, onBack }: Props) {
+export default function UserProfileScreen({ username, chatId, onBack, onOpenGallery }: Props) {
   const insets = useSafeAreaInsets();
   const slideX = useRef(new Animated.Value(-SCREEN_W)).current;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -142,17 +143,20 @@ export default function UserProfileScreen({ username, chatId, onBack }: Props) {
     }
   }, [username, onBack]);
 
-  const showMediaStub = useCallback(() => {
-    Alert.alert('В разработке', 'Полноэкранный просмотр медиа появится позже.');
-  }, []);
+  const openMediaAt = useCallback((index: number) => {
+    if (!onOpenGallery) return;
+    const urls: string[] = [];
+    for (const m of media) if (m.image) urls.push(m.image);
+    if (urls.length) onOpenGallery(urls, Math.max(0, Math.min(index, urls.length - 1)));
+  }, [media, onOpenGallery]);
 
   const renderTabContent = () => {
     if (tab === 'media') {
       if (!media.length) return <Text style={styles.empty}>Нет медиа</Text>;
       return (
         <View style={styles.grid}>
-          {media.map((item) => (
-            <TouchableOpacity key={item._key} style={styles.mediaTile} activeOpacity={0.8} onPress={showMediaStub}>
+          {media.map((item, i) => (
+            <TouchableOpacity key={item._key} style={styles.mediaTile} activeOpacity={0.8} onPress={() => openMediaAt(i)}>
               <Image source={{ uri: item.image }} style={styles.mediaImg} />
             </TouchableOpacity>
           ))}

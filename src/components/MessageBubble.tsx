@@ -19,6 +19,7 @@ type Props = {
   onLongPress: (msg: Message) => void;
   onReactionPress: (msgKey: string, emoji: string) => void;
   onReply: (msg: Message) => void;
+  onImagePress?: (url: string) => void;
   bubbleColor?: string;
   peer?: string;
 };
@@ -188,7 +189,7 @@ function VideoBubble({ url, duration, msgKey }: { url: string; duration: string;
   );
 }
 
-const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, showSender, onLongPress, onReactionPress, onReply, bubbleColor, peer }: Props) {
+const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, showSender, onLongPress, onReactionPress, onReply, onImagePress, bubbleColor, peer }: Props) {
   if (m.system && (m.callDir || m.missed)) {
     return <CallBubble message={m} peer={peer || m.sender} />;
   }
@@ -279,7 +280,9 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
 
             {m.image && (
               <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther, styles.imageBubble, isMe && bubbleColor ? { backgroundColor: bubbleColor } : undefined]}>
-                <Image source={{ uri: m.image }} style={styles.msgImage} resizeMode="cover" />
+                <TouchableOpacity activeOpacity={0.85} onPress={() => onImagePress && m.image && onImagePress(m.image)}>
+                  <Image source={{ uri: m.image }} style={styles.msgImage} resizeMode="cover" />
+                </TouchableOpacity>
                 <View style={styles.meta}>
                   <Text style={[styles.time, isMe ? styles.timeMe : styles.timeOther]}>{formatTime(m.ts)}</Text>
                   {isMe && <CheckMark read={isRead} />}

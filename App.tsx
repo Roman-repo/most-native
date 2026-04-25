@@ -14,6 +14,7 @@ import UserProfileScreen from './src/screens/UserProfileScreen';
 import ProfileEditScreen from './src/screens/ProfileEditScreen';
 import CallScreen from './src/screens/CallScreen';
 import DrawerContent from './src/screens/DrawerContent';
+import GalleryScreen from './src/screens/GalleryScreen';
 import { init as initCallManager } from './src/services/CallManager';
 import { setMeForRingtones } from './src/services/ringtones';
 import { theme } from './src/styles/theme';
@@ -30,6 +31,7 @@ export default function App() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [profileUser, setProfileUser] = useState<string | null>(null);
   const [profileEditOpen, setProfileEditOpen] = useState(false);
+  const [gallery, setGallery] = useState<{ images: string[]; index: number } | null>(null);
   const drawerAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
 
   // Автологин при запуске
@@ -138,6 +140,7 @@ export default function App() {
               onOpenPrivate={handleOpenPrivate}
               onOpenProfile={(otherUser) => setProfileUser(otherUser)}
               onNavigateToChat={handleOpenChat}
+              onOpenGallery={(images, index) => setGallery({ images, index })}
             />
           )}
 
@@ -147,6 +150,7 @@ export default function App() {
               username={profileUser}
               chatId={currentChat.id}
               onBack={() => setProfileUser(null)}
+              onOpenGallery={(images, index) => setGallery({ images, index })}
             />
           )}
 
@@ -175,6 +179,15 @@ export default function App() {
           {/* Profile edit overlay */}
           {user && profileEditOpen && (
             <ProfileEditScreen user={user} onBack={() => setProfileEditOpen(false)} />
+          )}
+
+          {/* Gallery overlay */}
+          {gallery && (
+            <GalleryScreen
+              images={gallery.images}
+              initialIndex={gallery.index}
+              onClose={() => setGallery(null)}
+            />
           )}
 
           {/* Call overlay — поверх всего */}

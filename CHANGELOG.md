@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## v4.13.0 (2026-04-24) — Фотогалерея
+
+**Фича:** полноэкранный просмотр фото из чата — pinch-zoom, double-tap zoom, свайп между фото, swipe-down для закрытия. Вход — тап по фото в пузыре или в таб «Медиа» профиля.
+
+**Что сделано:**
+- Добавлены зависимости: `react-native-awesome-gallery`, `expo-image`, `react-native-reanimated` (Expo-совместимая версия). Работает в Expo Go — нативных модулей не требует.
+- `src/screens/GalleryScreen.tsx` — новый компонент: `Modal` transparent, `AwesomeGallery` внутри, кастомный `renderItem` с `expo-image` (`recyclingKey` для кэша), хедер с счётчиком «N из M» и крестиком (toggle по тапу), `onSwipeToClose`, `doubleTapScale=2.5`, `maxScale=5`, `numToRender=3`.
+- `src/components/MessageBubble.tsx` — новый prop `onImagePress`, фото-пузырь обёрнут в `TouchableOpacity` с этим коллбэком.
+- `src/screens/ChatScreen.tsx` — новый prop `onOpenGallery`, коллбэк `handleImagePress` собирает `msg.image` из всех сообщений чата и открывает галерею на текущем индексе.
+- `src/screens/UserProfileScreen.tsx` — новый prop `onOpenGallery`, тап по тайлу в табе «Медиа» открывает галерею на соответствующем индексе (вместо заглушки `Alert`).
+- `App.tsx` — state `gallery: { images, index } | null`, overlay `<GalleryScreen>` поверх всех экранов, коллбэки проброшены в `ChatScreen` и `UserProfileScreen`.
+
+**Что НЕ в этой фиче (вынесено в бэклог):**
+- save/share/info фото (кнопки сохранения/шаринга/инфо).
+- Видео в галерее (сейчас только фото).
+- Декодирование base64 data-URL → `file://` через `expo-file-system` для крупных альбомов (промежуточный шаг до миграции на Firebase Storage, BL-1).
+
 ## v4.12.0 (2026-04-24) — Оптимизация рендеринга списков
 
 **Оптимизация:** уменьшение ре-рендеров FlatList за счёт мемоизации `renderItem` и `keyExtractor`, тюнинг параметров виртуализации в списке чатов.
