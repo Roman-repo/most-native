@@ -1,8 +1,9 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity,
+  View, Text, TouchableOpacity,
   StyleSheet, ActivityIndicator,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import Svg, { Line } from 'react-native-svg';
 import { db } from '../services/firebase';
 import { ref, onValue, off } from 'firebase/database';
@@ -216,13 +217,10 @@ export default function ChatListScreen({ user, onOpenChat, onOpenDrawer }: Props
         <View style={{ width: 40 }} />
       </View>
 
-      <FlatList
+      <FlashList
         data={chats}
         keyExtractor={keyExtractor}
         renderItem={renderChatItem}
-        initialNumToRender={12}
-        maxToRenderPerBatch={8}
-        windowSize={7}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         ListEmptyComponent={
           <Text style={styles.empty}>Нет чатов</Text>
