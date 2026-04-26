@@ -1,81 +1,101 @@
-import { useEffect, useRef, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { BottomSheetModal, BottomSheetView, BottomSheetBackdrop, type BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
+import { useLayoutEffect, useRef } from 'react';
+import {
+  View, Text, StyleSheet, TouchableOpacity, Modal, Animated, Easing,
+} from 'react-native';
+import { BlurView } from 'expo-blur';
 import { IconVideoCamera, IconWallpaper } from './Icons';
+import { theme } from '../styles/theme';
 
 export type ChatMenuAction = 'videoCall' | 'wallpaper';
 
 type Props = {
   visible: boolean;
   canVideoCall: boolean;
+  topOffset: number;
   onPick: (action: ChatMenuAction) => void;
   onClose: () => void;
 };
 
-export default function ChatMenu({ visible, canVideoCall, onPick, onClose }: Props) {
-  const ref = useRef<BottomSheetModal>(null);
-  const snapPoints = useMemo(() => ['25%'], []);
+const MENU_WIDTH = 220;
 
-  useEffect(() => {
-    if (visible) ref.current?.present();
-    else ref.current?.dismiss();
+export default function ChatMenu({ visible, canVideoCall, topOffset, onPick, onClose }: Props) {
+  const scale = useRef(new Animated.Value(0.92)).current;
+  const translateY = useRef(new Animated.Value(-8)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useLayoutEffect(() => {
+    if (visible) {
+      scale.setValue(0.92); translateY.setValue(-8); opacity.setValue(0);
+      Animated.parallel([
+        Animated.timing(scale, { toValue: 1, duration: 180, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.timing(translateY, { toValue: 0, duration: 180, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver: true }),
+      ]).start();
+    }
   }, [visible]);
 
-  const renderBackdrop = useCallback(
-    (props: BottomSheetBackdropProps) => (
-      <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} pressBehavior="close" />
-    ),
-    [],
-  );
+  const close = () => {
+    Animated.timing(opacity, { toValue: 0, duration: 120, useNativeDriver: true }).start(onClose);
+  };
+
+  const handle = (action: ChatMenuAction) => () => {
+    onPick(action);
+    close();
+  };
 
   return (
-    <BottomSheetModal
-      ref={ref}
-      snapPoints={snapPoints}
-      enableDynamicSizing
-      onDismiss={onClose}
-      backdropComponent={renderBackdrop}
-      backgroundStyle={styles.bg}
-      handleIndicatorStyle={styles.handle}
-    >
-      <BottomSheetView style={styles.content}>
-        {canVideoCall && (
-          <TouchableOpacity
-            style={styles.item}
-            activeOpacity={0.6}
-            onPress={() => onPick('videoCall')}
-          >
-            <IconVideoCamera size={20} color="#fff" />
-            <Text style={styles.itemText}>Видеозвонок</Text>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={close}>
+      <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={close} />
+      <Animated.View
+        pointerEvents="box-none"
+        style={[
+          styles.anchor,
+          { top: topOffset, opacity, transform: [{ scale }, { translateY }] },
+        ]}
+      >
+        <BlurView intensity={60} tint="dark" experimentalBlurMethod="dimezisBlurView" style={styles.ctx}>
+          {canVideoCall && (
+            <TouchableOpacity style={styles.item} activeOpacity={0.6} onPress={handle('videoCall')}>
+              <IconVideoCamera size={20} color={theme.text} />
+              <Text style={styles.itemText}>Видеозвонок</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.item} activeOpacity={0.6} onPress={handle('wallpaper')}>
+            <IconWallpaper size={20} color={theme.text} />
+            <Text style={styles.itemText}>Изменить обои</Text>
           </TouchableOpacity>
-        )}
-        <TouchableOpacity
-          style={styles.item}
-          activeOpacity={0.6}
-          onPress={() => onPick('wallpaper')}
-        >
-          <IconWallpaper size={20} color="#fff" />
-          <Text style={styles.itemText}>Изменить обои</Text>
-        </TouchableOpacity>
-      </BottomSheetView>
-    </BottomSheetModal>
+        </BlurView>
+      </Animated.View>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  bg: { backgroundColor: 'rgba(28, 28, 40, 0.98)' },
-  handle: { backgroundColor: 'rgba(255,255,255,0.3)' },
-  content: { paddingBottom: 24 },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'transparent' },
+  anchor: {
+    position: 'absolute',
+    right: 8,
+    width: MENU_WIDTH,
+  },
+  ctx: {
+    backgroundColor: 'rgba(15,12,41,0.78)',
+    borderRadius: 12,
+    padding: 3,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
   item: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
   },
   itemText: {
     fontSize: 16,
-    color: '#fff',
-    fontWeight: '500',
+    color: theme.text,
+    flex: 1,
   },
 });

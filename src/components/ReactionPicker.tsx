@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import React from 'react';
 import {
   View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet,
@@ -42,7 +42,7 @@ export default function ReactionPicker({
   const opacity = useRef(new Animated.Value(0)).current;
   const [showAllEmoji, setShowAllEmoji] = useState(false);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (visible) {
       setShowAllEmoji(false);
       scale.setValue(0.92); translateY.setValue(8); opacity.setValue(0);
@@ -122,7 +122,7 @@ const WIN = Dimensions.get('window');
 const MENU_WIDTH = Math.min(280, WIN.width - 40);
 
 const styles = StyleSheet.create({
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.15)' },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'transparent' },
   anchor: {
     position: 'absolute',
     top: WIN.height / 2 - 200,

@@ -4,7 +4,7 @@ import {
   FlatList, Platform, Animated, Easing, Keyboard, Vibration, Alert,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
-import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, Easing as REasing } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, Easing as REasing, LinearTransition } from 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -89,6 +89,9 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
   const [editH, setEditH] = useState(0);
   const [replyH, setReplyH] = useState(0);
   const [inputH, setInputH] = useState(0);
+  const [deletingKeys, setDeletingKeys] = useState<Set<string>>(new Set());
+  const [layoutAnimating, setLayoutAnimating] = useState(false);
+  const layoutAnimTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const isNearBottomRef = useRef(true);
   const pinIndexRef = useRef(0);
@@ -360,7 +363,6 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
     stopTyping(chatId, user);
     const reply = replyTo;
     setReplyTo(null);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     await sendMessage(chatId, user, t, reply ?? undefined);
   }, [text, chatId, user, replyTo]);
 
@@ -422,10 +424,32 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
     }, 220);
   }, [selectedMsg, text]);
 
-  const handleDelete = useCallback(async () => {
+  const handleDelete = useCallback(() => {
     if (!selectedMsg) return;
-    await deleteMessage(chatId, selectedMsg._key);
-  }, [selectedMsg, chatId]);
+    const key = selectedMsg._key;
+    setDeletingKeys(prev => {
+      if (prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.add(key);
+      return next;
+    });
+    setLayoutAnimating(true);
+    if (layoutAnimTimerRef.current) clearTimeout(layoutAnimTimerRef.current);
+    layoutAnimTimerRef.current = setTimeout(() => setLayoutAnimating(false), 2400);
+  }, [selectedMsg]);
+
+  const actuallyDelete = useCallback(async (key: string) => {
+    try {
+      await deleteMessage(chatId, key);
+    } finally {
+      setDeletingKeys(prev => {
+        if (!prev.has(key)) return prev;
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }
+  }, [chatId]);
 
   const handlePrivate = useCallback(() => {
     if (!selectedMsg || !onOpenPrivate) return;
@@ -541,8 +565,11 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
       onImagePress={handleImagePress}
       bubbleColor={chatTheme?.acc}
       peer={!isGroup && !isGeneralChat ? chatName : undefined}
+      deleting={deletingKeys.has(item._key)}
+      armed={selectedMsg?._key === item._key}
+      onDeleteAnimComplete={() => actuallyDelete(item._key)}
     />
-  ), [user, showSenderMap, handleLongPress, handleReactionPress, handleReply, handleImagePress, chatTheme, maxOtherReadTs, isGroup, isGeneralChat, chatName]);
+  ), [user, showSenderMap, handleLongPress, handleReactionPress, handleReply, handleImagePress, chatTheme, maxOtherReadTs, isGroup, isGeneralChat, chatName, deletingKeys, actuallyDelete, selectedMsg]);
 
   const keyExtractor = useCallback((item: Message) => item._key, []);
 
@@ -632,11 +659,13 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
 
         {/* Messages + reply bar (absolute поверх списка) */}
         <Animated.View style={[styles.listWrap, { opacity: listOpacity }]}>
-          <FlatList
-            ref={flatListRef}
+          <Reanimated.FlatList
+            ref={flatListRef as any}
             data={reversedMessages}
             keyExtractor={keyExtractor}
             renderItem={renderItem}
+            extraData={deletingKeys}
+            itemLayoutAnimation={layoutAnimating ? LinearTransition.duration(300) : undefined}
             inverted
             onScroll={(e) => {
               isNearBottomRef.current = e.nativeEvent.contentOffset.y < 80;
@@ -648,8 +677,8 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
             contentContainerStyle={[
               styles.listContent,
               {
-                paddingTop: 12 + headerH + pinH,
-                paddingBottom: 12 + inputH + (editMsg ? editH : 0) + (replyTo ? replyH : 0),
+                paddingTop: 12 + inputH + (editMsg ? editH : 0) + (replyTo ? replyH : 0),
+                paddingBottom: 12 + headerH + pinH,
               },
             ]}
             maxToRenderPerBatch={10}
@@ -815,6 +844,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
         <ChatMenu
           visible={chatMenuOpen}
           canVideoCall={!isGeneralChat && !isGroup}
+          topOffset={headerH + 4}
           onPick={handleChatMenuPick}
           onClose={() => setChatMenuOpen(false)}
         />
