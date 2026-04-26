@@ -11,6 +11,7 @@ import { SvgXml } from 'react-native-svg';
 import { theme } from '../styles/theme';
 import { ANIM_STICKERS } from '../utils/emoji';
 import type { Message } from '../managers/ChatManager';
+import ThanosSnap from './ThanosSnap';
 
 type Props = {
   message: Message;
@@ -23,6 +24,9 @@ type Props = {
   onImagePress?: (url: string) => void;
   bubbleColor?: string;
   peer?: string;
+  deleting?: boolean;
+  armed?: boolean;
+  onDeleteAnimComplete?: () => void;
 };
 
 const READ_COLOR = '#55EFC4';
@@ -190,7 +194,7 @@ function VideoBubble({ url, duration, msgKey }: { url: string; duration: string;
   );
 }
 
-const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, showSender, onLongPress, onReactionPress, onReply, onImagePress, bubbleColor, peer }: Props) {
+const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, showSender, onLongPress, onReactionPress, onReply, onImagePress, bubbleColor, peer, deleting, armed, onDeleteAnimComplete }: Props) {
   if (m.system && (m.callDir || m.missed)) {
     return <CallBubble message={m} peer={peer || m.sender} />;
   }
@@ -227,13 +231,13 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
   const onHandlerStateChange = (event: any) => {
     const { state, translationX } = event.nativeEvent;
     if (state === State.ACTIVE) {
-      const clamped = Math.max(0, Math.min(translationX, SWIPE_THRESHOLD));
-      const progress = clamped / SWIPE_THRESHOLD;
+      const clamped = Math.min(0, Math.max(translationX, -SWIPE_THRESHOLD));
+      const progress = -clamped / SWIPE_THRESHOLD;
       replyOpacity.setValue(progress);
     }
     if (state === State.END || state === State.CANCELLED || state === State.FAILED) {
-      if (translationX >= SWIPE_THRESHOLD) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      if (translationX <= -SWIPE_THRESHOLD) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft).catch(() => {});
         onReply(m);
       }
       Animated.parallel([
@@ -244,17 +248,18 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
   };
 
   const clampedTranslate = translateX.interpolate({
-    inputRange: [0, SWIPE_THRESHOLD, SWIPE_THRESHOLD + 40],
-    outputRange: [0, SWIPE_THRESHOLD, SWIPE_THRESHOLD + 10],
+    inputRange: [-(SWIPE_THRESHOLD + 40), -SWIPE_THRESHOLD, 0],
+    outputRange: [-(SWIPE_THRESHOLD + 10), -SWIPE_THRESHOLD, 0],
     extrapolate: 'clamp',
   });
 
   return (
+    <ThanosSnap active={!!deleting} armed={!!armed} onComplete={onDeleteAnimComplete || (() => {})}>
     <Animated.View style={{ opacity: entryOpacity, transform: [{ translateY: entryTranslateY }, { scale: entryScale }] }}>
     <PanGestureHandler
       onGestureEvent={onGestureEvent}
       onHandlerStateChange={onHandlerStateChange}
-      activeOffsetX={10}
+      activeOffsetX={-10}
       failOffsetY={[-10, 10]}
     >
       <Animated.View style={[styles.row, isMe ? styles.rowMe : styles.rowOther]}>
@@ -268,7 +273,7 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
         </Animated.View>
 
         <Animated.View style={{ transform: [{ translateX: clampedTranslate }] }}>
-          <TouchableOpacity activeOpacity={0.85} delayLongPress={400} onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); onLongPress(m); }}>
+          <TouchableOpacity activeOpacity={0.85} onPress={() => onLongPress(m)}>
             {showSender && !isMe && (
               <Text style={[styles.senderName, { color: senderColor(m.sender) }]}>{m.sender}</Text>
             )}
@@ -362,6 +367,7 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
       </Animated.View>
     </PanGestureHandler>
     </Animated.View>
+    </ThanosSnap>
   );
 }, (prev, next) =>
   prev.message._key === next.message._key &&
@@ -381,7 +387,9 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
   prev.message.system === next.message.system &&
   prev.message.callDir === next.message.callDir &&
   prev.message.callDur === next.message.callDur &&
-  prev.message.missed === next.message.missed
+  prev.message.missed === next.message.missed &&
+  prev.deleting === next.deleting &&
+  prev.armed === next.armed
 );
 
 export default MessageBubble;
@@ -392,8 +400,8 @@ const styles = StyleSheet.create({
   rowOther: { alignSelf: 'flex-start' },
 
   replyHint: { position: 'absolute', top: '50%', marginTop: -14, zIndex: 1 },
-  replyHintMe: { left: -32 },
-  replyHintOther: { right: -32 },
+  replyHintMe: { right: -32 },
+  replyHintOther: { left: -32 },
   replyHintIcon: { fontSize: 20 },
 
   senderName: {

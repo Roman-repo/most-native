@@ -1,5 +1,26 @@
 # CHANGELOG
 
+## v4.16.0 (2026-04-26) — Песок
+
+**Фича:** Telegram-style «thanos snap» анимация удаления сообщений на Skia + полировка контекстного меню и свайпов.
+
+**Что сделано:**
+- `src/components/ThanosSnap.tsx` — новый компонент. Snapshot пузыря через `react-native-view-shot` (`captureRef` с jpg/0.9 без pixelRatio для скорости), частицы рендерятся через `<Atlas>` из `@shopify/react-native-skia`. Динамическая сетка ~3px на ячейку (cap 3000 частиц для больших картинок), разлёт «облаком» в 360° без гравитации, длительность 1800ms. Canvas с padding +120px по сторонам через absolute positioning — частицы могут улетать за границы пузыря, не обрезаются. **Pre-capture:** при открытии контекстного меню (`armed=true`) snapshot делается в фоне, на тап «Удалить» анимация стартует мгновенно без фриза и мигания.
+- `src/screens/ChatScreen.tsx` — `FlatList` → `Reanimated.FlatList` с `itemLayoutAnimation={LinearTransition.duration(300)}` для плавного сползания соседних пузырей при удалении. Анимация активируется только на время удаления (state `layoutAnimating` + 2.4s таймер) — иначе layout-анимация фейерверкала на любых padding-сдвигах (reply bar, edit bar). Состояние `deletingKeys: Set<string>` управляет какой пузырь анимируется.
+- `src/components/MessageBubble.tsx` — пропсы `deleting`, `armed`, `onDeleteAnimComplete`. Long-press → tap для вызова контекстного меню. Виброотклик при отправке убран. Свайп для ответа: вправо → влево (`activeOffsetX={-10}`, инверсия clamping/threshold), виброотклик ослаблен `Light` → `Soft` (минимальный импульс на Android).
+- `src/components/ChatMenu.tsx` — переписан с `BottomSheetModal` на Modal + absolute popup в правом верхнем углу под кнопкой ⋮ (по образу `ReactionPicker`). Анимация scale+translateY+opacity 180ms через `useLayoutEffect`. Параметр `topOffset={headerH + 4}` для точного позиционирования.
+- `src/components/ReactionPicker.tsx` — `useEffect` → `useLayoutEffect` для сброса значений ДО первого commit Modal — устранена дрожь при открытии. Затемнение фона (`rgba(0,0,0,0.15)`) → `transparent` — чат не темнеет при открытии меню.
+- Фикс верстки: paddingTop ↔ paddingBottom поменяны местами в `contentContainerStyle` инвертированного FlatList — хедер больше не перекрывает первое сообщение.
+- `react-native-view-shot@4.0.3` добавлен в зависимости.
+
+**EAS dev-build:** `0c930ec0-f6fd-4b1f-a4d2-82d25797eb44` — содержит `react-native-view-shot`.
+
+**Что НЕ в этой фиче (вынесено в бэклог):**
+- FlashList для `ChatScreen` — следующая фича.
+- Живые стикеры через WebView (SMIL не рендерится в react-native-svg на Android) — при следующей пересборке APK.
+- KeyboardStickyView — при следующей пересборке APK.
+- MMKV миграция, Profile Pager — отдельные фичи.
+
 ## v4.15.0 (2026-04-25) — Lists & sheets
 
 **Фича:** второй из трёх релизов «Native UX upgrade» — нативные списки и bottom-sheets, плюс архитектурный фикс blur.
