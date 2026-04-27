@@ -4,7 +4,7 @@ import {
   FlatList, Platform, Animated, Easing, Keyboard, Vibration, Alert,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
-import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, Easing as REasing, LinearTransition } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, Easing as REasing } from 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -90,8 +90,6 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
   const [replyH, setReplyH] = useState(0);
   const [inputH, setInputH] = useState(0);
   const [deletingKeys, setDeletingKeys] = useState<Set<string>>(new Set());
-  const [layoutAnimating, setLayoutAnimating] = useState(false);
-  const layoutAnimTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const isNearBottomRef = useRef(true);
   const pinIndexRef = useRef(0);
@@ -433,9 +431,8 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
       next.add(key);
       return next;
     });
-    setLayoutAnimating(true);
-    if (layoutAnimTimerRef.current) clearTimeout(layoutAnimTimerRef.current);
-    layoutAnimTimerRef.current = setTimeout(() => setLayoutAnimating(false), 2400);
+    // Отключаем layout animation во время ThanosSnap, чтобы избежать конфликтов со скроллом
+    // ThanosSnap сам управляет визуальной частью, а FlatList обновится после реального удаления
   }, [selectedMsg]);
 
   const actuallyDelete = useCallback(async (key: string) => {
@@ -665,7 +662,6 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
             keyExtractor={keyExtractor}
             renderItem={renderItem}
             extraData={deletingKeys}
-            itemLayoutAnimation={layoutAnimating ? LinearTransition.duration(300) : undefined}
             inverted
             onScroll={(e) => {
               isNearBottomRef.current = e.nativeEvent.contentOffset.y < 80;

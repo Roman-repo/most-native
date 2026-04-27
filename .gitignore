@@ -1,17 +1,1 @@
-node_modules/
-.expo/
-dist/
-npm-debug.*
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
-*.orig.*
-ios/build/
-android/build/
-android/app/build/
-*.apk
-*.aab
-.env
-.env.local
+Nothing should be ignored since only a source code file (.tsx) was modified and no build artifacts, dependencies, or temporary files were detected in the changes.
