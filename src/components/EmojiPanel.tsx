@@ -3,7 +3,7 @@ import {
   View, Text, TouchableOpacity, ScrollView,
   StyleSheet, Dimensions, FlatList,
 } from 'react-native';
-import { SvgXml } from 'react-native-svg';
+import AnimStickerWebView from './AnimStickerWebView';
 import { theme } from '../styles/theme';
 import { EMOJIS, STICKERS, ANIM_STICKERS } from '../utils/emoji';
 
@@ -33,7 +33,7 @@ const StickerCell = memo(({ item, onPress }: { item: string; onPress: (s: string
 
 const AnimCell = memo(({ item, onPress }: { item: typeof ANIM_STICKERS[0]; onPress: (id: string) => void }) => (
   <TouchableOpacity style={styles.animCell} onPress={() => onPress(item.id)}>
-    <SvgXml xml={item.svg} width={60} height={60} />
+    <AnimStickerWebView svg={item.svg} width={60} height={60} />
     <Text style={styles.animName}>{item.name}</Text>
   </TouchableOpacity>
 ));

@@ -1,5 +1,5 @@
 import { db } from '../services/firebase';
-import { ref, push, update, onValue, off, query, limitToLast, serverTimestamp, get } from 'firebase/database';
+import { ref, push, update, onValue, query, limitToLast, serverTimestamp, get } from 'firebase/database';
 
 export type Message = {
   _key: string;
@@ -29,15 +29,23 @@ export type PinInfo = { key: string; text: string; sender: string };
 export function listenMessages(
   chatId: string,
   callback: (messages: Message[]) => void,
+  limit: number = 50,
 ): () => void {
-  const q = query(ref(db, 'messages/' + chatId), limitToLast(200));
-  const handler = onValue(q, (snap) => {
+  const q = query(ref(db, 'messages/' + chatId), limitToLast(limit));
+  // onValue returns an Unsubscribe function in modular SDK — use it directly.
+  // off(q, 'value', handler) does NOT match the wrapped observer the SDK registers,
+  // so it silently fails to unsubscribe → listener leaks on every pageSize change.
+  const unsubscribe = onValue(q, (snap) => {
     const data = snap.val() || {};
-    const msgs: Message[] = Object.keys(data).map((k) => ({ _key: k, ...data[k] }));
+    const keys = Object.keys(data);
+    const msgs: Message[] = keys.map((k) => ({ _key: k, ...data[k] }));
     msgs.sort((a, b) => (a.ts || 0) - (b.ts || 0));
+    const firstTs = msgs[0]?.ts ?? 0;
+    const lastTs = msgs[msgs.length - 1]?.ts ?? 0;
+    console.log('[FB] onValue chat=', chatId, 'limit=', limit, 'returned=', keys.length, 'firstTs=', firstTs, 'lastTs=', lastTs);
     callback(msgs);
   });
-  return () => off(q, 'value', handler);
+  return unsubscribe;
 }
 
 export async function sendMessage(
@@ -133,7 +141,7 @@ export function listenPins(
   callback: (pins: PinInfo[]) => void,
 ): () => void {
   const r = ref(db, 'chats/' + chatId + '/pinnedMsgs');
-  const handler = onValue(r, async (snap) => {
+  const unsubscribe = onValue(r, async (snap) => {
     const pins = snap.val() || {};
     const keys = Object.keys(pins);
     if (!keys.length) { callback([]); return; }
@@ -149,7 +157,7 @@ export function listenPins(
       }));
     callback(pinInfos);
   });
-  return () => off(r, 'value', handler);
+  return unsubscribe;
 }
 
 export async function editMessage(

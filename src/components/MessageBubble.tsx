@@ -7,11 +7,10 @@ import CallBubble from './CallBubble';
 import { base64ToTempFile } from '../managers/MediaManager';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
-import { SvgXml } from 'react-native-svg';
+import AnimStickerWebView from './AnimStickerWebView';
 import { theme } from '../styles/theme';
 import { ANIM_STICKERS } from '../utils/emoji';
 import type { Message } from '../managers/ChatManager';
-import ThanosSnap from './ThanosSnap';
 
 type Props = {
   message: Message;
@@ -25,8 +24,8 @@ type Props = {
   bubbleColor?: string;
   peer?: string;
   deleting?: boolean;
-  armed?: boolean;
-  onDeleteAnimComplete?: () => void;
+  /** Called with bubble's outer View ref while mounted; null on unmount. */
+  registerBubbleRef?: (key: string, ref: any) => void;
 };
 
 const READ_COLOR = '#55EFC4';
@@ -60,19 +59,24 @@ function barHeights(seed: string): number[] {
   });
 }
 
+const audioUriCache = new Map<string, string>();
+
 function AudioBubble({ url, duration, msgKey }: { url: string; duration: string; msgKey: string }) {
   const [speedIdx, setSpeedIdx] = useState(0);
   const [listened, setListened] = useState(false);
-  const [resolvedUri, setResolvedUri] = useState<string | null>(null);
+  const [resolvedUri, setResolvedUri] = useState<string | null>(() => audioUriCache.get(msgKey) ?? null);
   const heights = useRef(barHeights(msgKey)).current;
 
   useEffect(() => {
     if (!url) return;
+    const cached = audioUriCache.get(msgKey);
+    if (cached) { setResolvedUri(cached); return; }
     if (url.startsWith('data:')) {
       base64ToTempFile(url, 'm4a', msgKey)
-        .then(path => setResolvedUri(path))
+        .then(path => { audioUriCache.set(msgKey, path); setResolvedUri(path); })
         .catch(e => console.error('[AudioBubble] base64 error', e));
     } else {
+      audioUriCache.set(msgKey, url);
       setResolvedUri(url);
     }
   }, [url, msgKey]);
@@ -127,8 +131,10 @@ function AudioBubble({ url, duration, msgKey }: { url: string; duration: string;
 
 const VID_SIZE = 200;
 
+const videoUriCache = new Map<string, string>();
+
 function VideoBubble({ url, duration, msgKey }: { url: string; duration: string; msgKey: string }) {
-  const [resolvedUri, setResolvedUri] = useState<string | null>(null);
+  const [resolvedUri, setResolvedUri] = useState<string | null>(() => videoUriCache.get(msgKey) ?? null);
   const [playing, setPlaying] = useState(false);
 
   const player = useVideoPlayer(resolvedUri ? { uri: resolvedUri } : null);
@@ -143,11 +149,14 @@ function VideoBubble({ url, duration, msgKey }: { url: string; duration: string;
 
   useEffect(() => {
     if (!url) return;
+    const cached = videoUriCache.get(msgKey);
+    if (cached) { setResolvedUri(cached); return; }
     if (url.startsWith('data:')) {
       base64ToTempFile(url, 'mp4', msgKey)
-        .then(path => setResolvedUri(path))
+        .then(path => { videoUriCache.set(msgKey, path); setResolvedUri(path); })
         .catch(e => console.error('[VideoBubble] base64 error', e));
     } else {
+      videoUriCache.set(msgKey, url);
       setResolvedUri(url);
     }
   }, [url, msgKey]);
@@ -194,26 +203,26 @@ function VideoBubble({ url, duration, msgKey }: { url: string; duration: string;
   );
 }
 
-const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, showSender, onLongPress, onReactionPress, onReply, onImagePress, bubbleColor, peer, deleting, armed, onDeleteAnimComplete }: Props) {
+const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, showSender, onLongPress, onReactionPress, onReply, onImagePress, bubbleColor, peer, deleting, registerBubbleRef }: Props) {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const replyOpacity = useRef(new Animated.Value(0)).current;
+  const outerViewRef = useRef<any>(null);
+
+  useEffect(() => {
+    translateX.setValue(0);
+    replyOpacity.setValue(0);
+  }, [m._key]);
+
+  // Register outer View ref with parent so singleton ThanosSnap can capture it
+  useEffect(() => {
+    if (!registerBubbleRef) return;
+    if (outerViewRef.current) registerBubbleRef(m._key, outerViewRef.current);
+    return () => { registerBubbleRef(m._key, null); };
+  }, [m._key, registerBubbleRef]);
+
   if (m.system && (m.callDir || m.missed)) {
     return <CallBubble message={m} peer={peer || m.sender} />;
   }
-  const translateX = useRef(new Animated.Value(0)).current;
-  const replyOpacity = useRef(new Animated.Value(0)).current;
-
-  const isRecent = Boolean(m.ts && (Date.now() - m.ts) < 3000);
-  const entryOpacity = useRef(new Animated.Value(isRecent ? 0.5 : 1)).current;
-  const entryTranslateY = useRef(new Animated.Value(isRecent ? 12 : 0)).current;
-  const entryScale = useRef(new Animated.Value(isRecent ? 0.97 : 1)).current;
-
-  useEffect(() => {
-    if (!isRecent) return;
-    Animated.parallel([
-      Animated.timing(entryOpacity, { toValue: 1, duration: 350, useNativeDriver: true }),
-      Animated.timing(entryTranslateY, { toValue: 0, duration: 350, useNativeDriver: true }),
-      Animated.timing(entryScale, { toValue: 1, duration: 350, useNativeDriver: true }),
-    ]).start();
-  }, []);
 
   const reactionMap: Record<string, number> = {};
   if (m.reactions) {
@@ -254,15 +263,17 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
   });
 
   return (
-    <ThanosSnap active={!!deleting} armed={!!armed} onComplete={onDeleteAnimComplete || (() => {})}>
-    <Animated.View style={{ opacity: entryOpacity, transform: [{ translateY: entryTranslateY }, { scale: entryScale }] }}>
     <PanGestureHandler
       onGestureEvent={onGestureEvent}
       onHandlerStateChange={onHandlerStateChange}
       activeOffsetX={-10}
       failOffsetY={[-10, 10]}
     >
-      <Animated.View style={[styles.row, isMe ? styles.rowMe : styles.rowOther]}>
+      <Animated.View
+        ref={outerViewRef}
+        collapsable={false}
+        style={[styles.row, isMe ? styles.rowMe : styles.rowOther, deleting && { opacity: 0 }]}
+      >
         {/* Reply icon hint */}
         <Animated.View style={[
           styles.replyHint,
@@ -282,7 +293,7 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
             )}
             {m.animSticker && (() => {
               const s = ANIM_STICKERS.find(a => a.id === m.animSticker);
-              return s ? <SvgXml xml={s.svg} width={90} height={90} /> : null;
+              return s ? <AnimStickerWebView svg={s.svg} width={90} height={90} /> : null;
             })()}
 
             {m.image && (
@@ -366,8 +377,6 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
         </Animated.View>
       </Animated.View>
     </PanGestureHandler>
-    </Animated.View>
-    </ThanosSnap>
   );
 }, (prev, next) =>
   prev.message._key === next.message._key &&
@@ -388,8 +397,7 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
   prev.message.callDir === next.message.callDir &&
   prev.message.callDur === next.message.callDur &&
   prev.message.missed === next.message.missed &&
-  prev.deleting === next.deleting &&
-  prev.armed === next.armed
+  prev.deleting === next.deleting
 );
 
 export default MessageBubble;

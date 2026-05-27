@@ -2,7 +2,7 @@
   "expo": {
     "name": "most-native",
     "slug": "most-native",
-    "version": "4.16.0",
+    "version": "4.17.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -13,7 +13,8 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.romanlg.mostnative"
     },
     "android": {
       "adaptiveIcon": {
@@ -22,15 +23,19 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
+      "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.WAKE_LOCK",
         "android.permission.BLUETOOTH_CONNECT",
         "android.permission.CAMERA",
-        "android.permission.READ_MEDIA_IMAGES"
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
+        "android.permission.POST_NOTIFICATIONS"
       ],
-      "package": "com.romanlg.mostnative",
+      "package": "com.rl.most",
       "versionCode": 1
     },
     "web": {
@@ -38,12 +43,14 @@
     },
     "plugins": [
       "expo-audio",
-      "expo-video"
+      "expo-video",
+      "expo-notifications"
     ],
     "extra": {
       "eas": {
-        "projectId": "cc393382-92b1-43c6-8e87-c15a04d97d23"
+        "projectId": "4460cb6f-65a4-4548-8ae3-58daaa7bbaf6"
       }
-    }
+    },
+    "owner": "rlgovsky"
   }
 }

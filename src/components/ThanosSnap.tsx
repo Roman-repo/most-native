@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, useMemo, type ReactNode } from 'react';
-import { View, type LayoutChangeEvent } from 'react-native';
+import { useEffect, useRef, useState, useMemo } from 'react';
+import { View } from 'react-native';
 import {
   Canvas, Atlas, Skia,
   type SkImage,
@@ -16,10 +16,14 @@ const DURATION = 1800;
 const PADDING = 120;
 
 type Props = {
+  /** View to capture (the message bubble). When null/undefined — singleton renders nothing. */
+  bubbleRef: View | null | undefined;
+  /** True while user is hovering picker (capture snapshot in advance). */
+  armed: boolean;
+  /** True after user tapped Delete — triggers Canvas anim. */
   active: boolean;
-  armed?: boolean;
+  /** Called after particle anim finishes. */
   onComplete: () => void;
-  children: ReactNode;
 };
 
 type Particle = {
@@ -31,128 +35,175 @@ type Particle = {
   delay: number;
 };
 
-export default function ThanosSnap({ active, armed, onComplete, children }: Props) {
-  const viewRef = useRef<View>(null);
+type Rect = { x: number; y: number; w: number; h: number };
+
+/**
+ * Singleton "Thanos snap" effect rendered at chat-screen level.
+ * Captures bubble's view → renders particle Canvas overlay at its screen position.
+ * Replaces the previous per-bubble ThanosSnap wrapper to drop 70× duplicated Skia/Reanimated infrastructure.
+ */
+export default function ThanosSnap({ bubbleRef, armed, active, onComplete }: Props) {
   const [snapshot, setSnapshot] = useState<SkImage | null>(null);
   const snapshotRef = useRef<SkImage | null>(null);
-  const capturingRef = useRef(false);
-  const [size, setSize] = useState({ w: 0, h: 0 });
+  const pendingCaptureRef = useRef<Promise<SkImage | null> | null>(null);
+  const [rect, setRect] = useState<Rect | null>(null);
   const progress = useSharedValue(0);
 
-  async function captureSnapshot(): Promise<SkImage | null> {
-    if (snapshotRef.current) return snapshotRef.current;
-    if (capturingRef.current) return null;
-    capturingRef.current = true;
-    try {
-      const uri = await captureRef(viewRef, {
-        format: 'jpg',
-        quality: 0.9,
-        result: 'tmpfile',
-      } as any);
-      const data = await Skia.Data.fromURI(uri);
-      const img = Skia.Image.MakeImageFromEncoded(data);
-      if (img) {
-        snapshotRef.current = img;
-        return img;
+  // Reset state when bubbleRef changes (different bubble selected)
+  const lastBubbleRefRef = useRef<View | null | undefined>(null);
+  if (lastBubbleRefRef.current !== bubbleRef) {
+    lastBubbleRefRef.current = bubbleRef;
+    snapshotRef.current = null;
+    pendingCaptureRef.current = null;
+    if (snapshot) setSnapshot(null);
+    if (rect) setRect(null);
+    progress.value = 0;
+  }
+
+  function measureBubble(): Promise<Rect | null> {
+    return new Promise((resolve) => {
+      if (!bubbleRef) { resolve(null); return; }
+      try {
+        bubbleRef.measureInWindow((x, y, w, h) => {
+          if (typeof x === 'number' && typeof w === 'number' && w > 0 && h > 0) {
+            resolve({ x, y, w, h });
+          } else {
+            resolve(null);
+          }
+        });
+      } catch {
+        resolve(null);
       }
-      return null;
-    } finally {
-      capturingRef.current = false;
+    });
+  }
+
+  function captureSnapshot(): Promise<SkImage | null> {
+    if (snapshotRef.current) return Promise.resolve(snapshotRef.current);
+    if (pendingCaptureRef.current) return pendingCaptureRef.current;
+    if (!bubbleRef) return Promise.resolve(null);
+    const p = (async () => {
+      try {
+        const uri = await captureRef(bubbleRef, {
+          format: 'jpg',
+          quality: 0.9,
+          result: 'tmpfile',
+        } as any);
+        const data = await Skia.Data.fromURI(uri);
+        const img = Skia.Image.MakeImageFromEncoded(data);
+        if (img) {
+          snapshotRef.current = img;
+          setSnapshot(img);
+          return img;
+        }
+        return null;
+      } finally {
+        pendingCaptureRef.current = null;
+      }
+    })();
+    pendingCaptureRef.current = p;
+    return p;
+  }
+
+  // Pre-capture when armed
+  useEffect(() => {
+    if (!armed || !bubbleRef) return;
+    if (snapshotRef.current && rect) {
+      console.log('[Thanos] armed: snapshot already in ref, reuse');
+      return;
     }
-  }
+    const t0 = Date.now();
+    console.log('[Thanos] armed → capture+measure start');
+    (async () => {
+      const r = await measureBubble();
+      if (r) setRect(r);
+      const img = await captureSnapshot();
+      if (img) console.log('[Thanos] armed capture done in', Date.now() - t0, 'ms', 'rect=', r);
+      else console.log('[Thanos] armed capture returned null');
+    })().catch(e => console.log('[Thanos] armed error', e));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [armed, bubbleRef]);
 
-  let baseCols = size.w > 0 ? Math.max(8, Math.floor(size.w / TARGET_CELL)) : 0;
-  let baseRows = size.h > 0 ? Math.max(4, Math.floor(size.h / TARGET_CELL)) : 0;
-  if (baseCols * baseRows > MAX_PARTICLES) {
-    const k = Math.sqrt((baseCols * baseRows) / MAX_PARTICLES);
-    baseCols = Math.max(8, Math.floor(baseCols / k));
-    baseRows = Math.max(4, Math.floor(baseRows / k));
-  }
-  const cols = baseCols;
-  const rows = baseRows;
-  const N = cols * rows;
+  // Trigger anim when active
+  useEffect(() => {
+    if (!active || !bubbleRef) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const hadSnapshot = !!snapshotRef.current;
+        const hadRect = !!rect;
+        console.log('[Thanos] active=true, hadSnapshot=', hadSnapshot, 'hadRect=', hadRect);
+        let r = rect;
+        if (!r) {
+          r = await measureBubble();
+          if (r) setRect(r);
+        }
+        const img = snapshotRef.current ?? await captureSnapshot();
+        if (cancelled) return;
+        if (!img || !r) { console.log('[Thanos] active: no img/rect → onComplete immediate'); onComplete(); return; }
+        console.log('[Thanos] starting Canvas anim');
+        progress.value = withTiming(
+          1,
+          { duration: DURATION, easing: Easing.out(Easing.quad) },
+          (finished) => { if (finished) runOnJS(onComplete)(); },
+        );
+      } catch (e) {
+        console.log('[Thanos] active error', e);
+        onComplete();
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, bubbleRef]);
 
-  const particles = useMemo<Particle[]>(() => {
-    if (N === 0) return [];
-    return Array.from({ length: N }, (_, i) => {
+  // Particles & sprites only computed when active (heavy work)
+  const particlesData = useMemo(() => {
+    if (!active || !rect) return { cols: 0, rows: 0, N: 0, particles: [] as Particle[] };
+    let baseCols = Math.max(8, Math.floor(rect.w / TARGET_CELL));
+    let baseRows = Math.max(4, Math.floor(rect.h / TARGET_CELL));
+    if (baseCols * baseRows > MAX_PARTICLES) {
+      const k = Math.sqrt((baseCols * baseRows) / MAX_PARTICLES);
+      baseCols = Math.max(8, Math.floor(baseCols / k));
+      baseRows = Math.max(4, Math.floor(baseRows / k));
+    }
+    const cols = baseCols;
+    const rows = baseRows;
+    const N = cols * rows;
+    const particles: Particle[] = Array.from({ length: N }, (_, i) => {
       const col = i % cols;
       const row = Math.floor(i / cols);
       const angle = Math.random() * Math.PI * 2;
       const speed = 50 + Math.random() * 160;
       const drift = (Math.random() - 0.5) * 120;
       return {
-        col,
-        row,
+        col, row,
         vx: Math.cos(angle) * speed + drift,
         vy: Math.sin(angle) * speed,
         rot: (Math.random() - 0.5) * Math.PI * 2,
         delay: (col / cols) * 0.55 + Math.random() * 0.25,
       };
     });
-  }, [cols, rows, N]);
+    return { cols, rows, N, particles };
+  }, [active, rect]);
 
-  function handleLayout(e: LayoutChangeEvent) {
-    const { width, height } = e.nativeEvent.layout;
-    if (width !== size.w || height !== size.h) {
-      setSize({ w: width, h: height });
-    }
-  }
-
-  useEffect(() => {
-    if (!armed) return;
-    if (size.w === 0 || size.h === 0) return;
-    if (snapshotRef.current) return;
-    let cancelled = false;
-    (async () => {
-      try { await captureSnapshot(); } catch {}
-      if (cancelled) return;
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [armed, size.w, size.h]);
-
-  useEffect(() => {
-    if (!active) return;
-    if (size.w === 0 || size.h === 0) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        let img = snapshotRef.current;
-        if (!img) img = await captureSnapshot();
-        if (cancelled) return;
-        if (!img) { onComplete(); return; }
-        setSnapshot(img);
-        progress.value = withTiming(
-          1,
-          { duration: DURATION, easing: Easing.out(Easing.quad) },
-          (finished) => {
-            if (finished) runOnJS(onComplete)();
-          },
-        );
-      } catch {
-        onComplete();
-      }
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, size.w, size.h]);
-
-  const cellW = cols > 0 ? size.w / cols : 0;
-  const cellH = rows > 0 ? size.h / rows : 0;
+  const { cols, rows, N, particles } = particlesData;
+  const cellW = cols > 0 && rect ? rect.w / cols : 0;
+  const cellH = rows > 0 && rect ? rect.h / rows : 0;
 
   const sprites = useMemo(() => {
-    if (!size.w || !size.h || !snapshot || cols === 0 || rows === 0) return [];
+    if (!active || !snapshot || !rect || cols === 0 || rows === 0) return [];
     const sw = snapshot.width();
     const sh = snapshot.height();
-    const sx = sw / size.w;
-    const sy = sh / size.h;
-    const cw = (size.w / cols) * sx;
-    const ch = (size.h / rows) * sy;
+    const sx = sw / rect.w;
+    const sy = sh / rect.h;
+    const cw = (rect.w / cols) * sx;
+    const ch = (rect.h / rows) * sy;
     return particles.map(p => Skia.XYWHRect(p.col * cw, p.row * ch, cw, ch));
-  }, [particles, snapshot, size.w, size.h, cols, rows]);
+  }, [active, particles, snapshot, rect, cols, rows]);
 
   const transforms = useDerivedValue(() => {
+    if (!active || N === 0 || !rect || !snapshot) return [];
     const out: ReturnType<typeof Skia.RSXform>[] = [];
+    const sx = rect.w / snapshot.width();
     for (let i = 0; i < N; i++) {
       const p = particles[i];
       const localT = Math.max(0, Math.min(1, (progress.value - p.delay) / (1 - p.delay)));
@@ -160,7 +211,6 @@ export default function ThanosSnap({ active, armed, onComplete, children }: Prop
       const ty = PADDING + p.row * cellH + p.vy * localT;
       const baseScale = Math.max(0, 1 - localT);
       const angle = p.rot * localT;
-      const sx = snapshot ? size.w / snapshot.width() : 1;
       const cos = Math.cos(angle) * baseScale * sx;
       const sin = Math.sin(angle) * baseScale * sx;
       out.push(Skia.RSXform(cos, sin, tx, ty));
@@ -168,28 +218,24 @@ export default function ThanosSnap({ active, armed, onComplete, children }: Prop
     return out;
   });
 
-
-  if (active && snapshot && size.w > 0 && size.h > 0 && N > 0 && sprites.length === N) {
-    return (
-      <View style={{ width: size.w, height: size.h }}>
-        <Canvas
-          style={{
-            position: 'absolute',
-            left: -PADDING,
-            top: -PADDING,
-            width: size.w + PADDING * 2,
-            height: size.h + PADDING * 2,
-          }}
-        >
-          <Atlas image={snapshot} sprites={sprites} transforms={transforms} />
-        </Canvas>
-      </View>
-    );
+  if (!active || !snapshot || !rect || N === 0 || sprites.length !== N) {
+    return null;
   }
 
   return (
-    <View ref={viewRef} collapsable={false} onLayout={handleLayout}>
-      {children}
+    <View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left: rect.x - PADDING,
+        top: rect.y - PADDING,
+        width: rect.w + PADDING * 2,
+        height: rect.h + PADDING * 2,
+      }}
+    >
+      <Canvas style={{ width: rect.w + PADDING * 2, height: rect.h + PADDING * 2 }}>
+        <Atlas image={snapshot} sprites={sprites} transforms={transforms} />
+      </Canvas>
     </View>
   );
 }

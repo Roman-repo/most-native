@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "1036467352069",
+    "firebase_url": "https://pulse-chat-6b66e-default-rtdb.firebaseio.com",
+    "project_id": "pulse-chat-6b66e",
+    "storage_bucket": "pulse-chat-6b66e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1036467352069:android:c9faee0dc45ec871cf626c",
+        "android_client_info": {
+          "package_name": "com.rl.most"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD2vpUnxCPynroIQa-z-0hs79tKRTzNNTk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

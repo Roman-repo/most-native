@@ -1,10 +1,13 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
-  FlatList, Platform, Animated, Easing, Keyboard, Vibration, Alert,
+  Platform, Animated, Easing, Keyboard, Vibration, Alert,
+  type NativeSyntheticEvent, type NativeScrollEvent,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
-import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, Easing as REasing, LinearTransition } from 'react-native-reanimated';
+import { ScrollView } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+
+import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, Easing as REasing, FadeIn } from 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -13,6 +16,7 @@ import {
 } from 'expo-audio';
 import { theme } from '../styles/theme';
 import MessageBubble from '../components/MessageBubble';
+import ThanosSnap from '../components/ThanosSnap';
 import AvatarView from '../components/AvatarView';
 import ReactionPicker from '../components/ReactionPicker';
 import ForwardModal, { type ForwardTarget } from '../components/ForwardModal';
@@ -28,6 +32,7 @@ import VideoRecorder from '../components/VideoRecorder';
 import { sendVideoMsg, editMessage, deleteMessage, forwardMessage } from '../managers/ChatManager';
 import EmojiPanel from '../components/EmojiPanel';
 import { getChatTheme, setChatTheme, type ChatTheme } from '../utils/chatThemes';
+import { ANIM_STICKERS } from '../utils/emoji';
 import * as ImagePicker from 'expo-image-picker';
 import { fileToBase64 } from '../managers/MediaManager';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -43,6 +48,10 @@ import {
 
 const BAR_COUNT = 24;
 const EMOJI_PANEL_HEIGHT = 300;
+
+// Module-level animation descriptors — same reference across renders to avoid Reanimated re-triggering
+const ENTER_ANIM = FadeIn.duration(220);
+const SCROLL_LOCK_AFTER_DELETE_MS = 600;
 
 type Props = {
   chatId: string;
@@ -65,6 +74,22 @@ function getAvatarColor(name: string): string {
   return AVATAR_COLORS[h];
 }
 
+function MessageSeparator() {
+  return <View style={separatorStyle} />;
+}
+const separatorStyle = { height: 3 };
+
+function ChatEmpty() {
+  return (
+    <View style={emptyWrapStyle}>
+      <Text style={emptyTextStyle}>Начните общение 👋</Text>
+    </View>
+  );
+}
+const emptyWrapStyle = { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, paddingTop: 60 };
+const emptyTextStyle = { color: theme.text3, fontSize: 15 };
+
+
 
 export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, onOpenPrivate, onOpenProfile, onNavigateToChat, onOpenGallery }: Props) {
   const insets = useSafeAreaInsets();
@@ -83,6 +108,8 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
   const [themePickerOpen, setThemePickerOpen] = useState(false);
   const [chatMenuOpen, setChatMenuOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [pendingSticker, setPendingSticker] = useState<string | null>(null);
+  const [pendingAnimSticker, setPendingAnimSticker] = useState<string | null>(null);
   // — Layout heights for absolute-positioned bars (so BlurView overlays the message list) —
   const [headerH, setHeaderH] = useState(0);
   const [pinH, setPinH] = useState(0);
@@ -90,13 +117,34 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
   const [replyH, setReplyH] = useState(0);
   const [inputH, setInputH] = useState(0);
   const [deletingKeys, setDeletingKeys] = useState<Set<string>>(new Set());
-  const [layoutAnimating, setLayoutAnimating] = useState(false);
-  const layoutAnimTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const flatListRef = useRef<FlatList>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const msgPositionsRef = useRef<Map<string, number>>(new Map());
   const isNearBottomRef = useRef(true);
   const pinIndexRef = useRef(0);
   const listOpacity = useRef(new Animated.Value(0)).current;
   const initialLoadRef = useRef(false);
+  // Pagination
+  const [pageSize, setPageSize] = useState(50);
+  const [hasMore, setHasMore] = useState(true);
+  const paginationCooldownRef = useRef(false);
+  // Track keys we've already rendered, so entering animation only fires for freshly arrived messages
+  const seenKeysRef = useRef<Set<string>>(new Set());
+  const newlyAddedKeysRef = useRef<Set<string>>(new Set());
+  const initialScrollDoneRef = useRef(false);
+  const prevContentHeightRef = useRef(0);
+  const lastBottomTsRef = useRef(0);
+  const scrollLockUntilRef = useRef(0);
+  // Map of msgKey → outer View ref of MessageBubble (for singleton ThanosSnap to capture)
+  const bubbleRefsMap = useRef<Map<string, any>>(new Map());
+  const [thanosTargetKey, setThanosTargetKey] = useState<string | null>(null);
+  // Re-render trigger when refs map changes (so singleton ThanosSnap re-evaluates)
+  const [, setBubbleRefsTick] = useState(0);
+
+  const registerBubbleRef = useCallback((key: string, ref: any) => {
+    if (ref) bubbleRefsMap.current.set(key, ref);
+    else bubbleRefsMap.current.delete(key);
+    setBubbleRefsTick(t => t + 1);
+  }, []);
 
   // — Recording mode: audio | video (tap mic to toggle) —
   const [recordMode, setRecordMode] = useState<'audio' | 'video'>('audio');
@@ -131,7 +179,6 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
   const contentAnimStyle = useAnimatedStyle(() => ({ paddingBottom: bottomPad.value }));
   const emojiAnimating = useRef(false);
   const emojiOpenRef = useRef(false);
-  const kbHeightRef = useRef(0);
 
   // — Metering → wave bars —
   useEffect(() => {
@@ -143,32 +190,62 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
   }, [recState.metering, recording]);
 
   useEffect(() => {
-    const unsubMsgs = listenMessages(chatId, (newMessages) => {
-      setMessages(newMessages);
-    });
-    const unsubPins = listenPins(chatId, setPins);
-    getChatTheme(chatId).then(setChatThemeState);
-    return () => { unsubMsgs(); unsubPins(); };
-  }, [chatId]);
+    console.log('[Sub] listenMessages SUBSCRIBE chatId=', chatId, 'pageSize=', pageSize);
+    const unsubMsgs = listenMessages(chatId, setMessages, pageSize);
+    return () => {
+      console.log('[Sub] listenMessages UNSUBSCRIBE chatId=', chatId, 'pageSize=', pageSize);
+      unsubMsgs();
+    };
+  }, [chatId, pageSize]);
 
   useEffect(() => {
-    if (messages.length === 0) return;
-    if (!initialLoadRef.current) {
-      initialLoadRef.current = true;
-      Animated.timing(listOpacity, {
-        toValue: 1, duration: 250, useNativeDriver: true,
-      }).start();
-    }
-  }, [messages.length]);
+    const unsubPins = listenPins(chatId, setPins);
+    getChatTheme(chatId).then(setChatThemeState);
+    return () => { unsubPins(); };
+  }, [chatId]);
 
-  const prevCountRef = useRef(0);
-  const handleContentSizeChange = useCallback(() => {
-    const count = messages.length;
-    if (count > prevCountRef.current && prevCountRef.current > 0 && isNearBottomRef.current) {
-      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+  // Reset pagination state when switching chats
+  useEffect(() => {
+    console.log('[Reset] chatId effect FIRED — resetting pageSize=50, scrollLock=0. chatId=', chatId);
+    setPageSize(50);
+    setHasMore(true);
+    seenKeysRef.current = new Set();
+    newlyAddedKeysRef.current = new Set();
+    paginationCooldownRef.current = false;
+    initialLoadRef.current = false;
+    initialScrollDoneRef.current = false;
+    prevContentHeightRef.current = 0;
+    lastBottomTsRef.current = 0;
+    scrollLockUntilRef.current = 0;
+    listOpacity.setValue(0);
+  }, [chatId]);
+
+  // Detect ChatScreen mount/unmount (different from chatId effect — this fires on actual mount)
+  useEffect(() => {
+    console.log('[Mount] ChatScreen MOUNTED');
+    return () => { console.log('[Mount] ChatScreen UNMOUNTED'); };
+  }, []);
+
+  // Detect newly arrived keys (vs. previously seen) before render reads them.
+  // useMemo runs during render, before children, so renderItem sees up-to-date sets.
+  useMemo(() => {
+    const newOnes = new Set<string>();
+    for (const m of messages) {
+      if (!seenKeysRef.current.has(m._key)) {
+        seenKeysRef.current.add(m._key);
+        newOnes.add(m._key);
+      }
     }
-    prevCountRef.current = count;
-  }, [messages.length]);
+    newlyAddedKeysRef.current = newOnes;
+  }, [messages]);
+
+  // After messages update from a pagination, re-enable cooldown and decide hasMore
+  useEffect(() => {
+    paginationCooldownRef.current = false;
+    if (messages.length > 0 && messages.length < pageSize) {
+      setHasMore(false);
+    }
+  }, [messages.length, pageSize]);
 
 
   const openEmoji = useCallback(() => {
@@ -177,6 +254,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
     emojiOpenRef.current = true;
     Keyboard.dismiss();
     setEmojiOpen(true);
+    // Animate emoji panel up + give content room via bottomPad (keyboard is dismissed, so KAV won't add padding)
     bottomPad.value = withTiming(EMOJI_PANEL_HEIGHT, { duration: 280, easing: REasing.out(REasing.cubic) });
     Animated.timing(emojiTranslate, {
       toValue: 0, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: true,
@@ -187,46 +265,31 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
     if (emojiAnimating.current) return;
     emojiAnimating.current = true;
     emojiOpenRef.current = false;
-    const targetPad = kbHeightRef.current; // keyboard may be about to show
-    bottomPad.value = withTiming(targetPad, { duration: 240, easing: REasing.in(REasing.cubic) });
+    bottomPad.value = withTiming(0, { duration: 240, easing: REasing.in(REasing.cubic) });
     Animated.timing(emojiTranslate, {
       toValue: EMOJI_PANEL_HEIGHT, duration: 240, easing: Easing.in(Easing.cubic), useNativeDriver: true,
     }).start(() => { emojiAnimating.current = false; setEmojiOpen(false); });
   }, [emojiTranslate, bottomPad]);
 
-  // — Smooth keyboard tracking (replaces KeyboardAvoidingView) —
+  // KeyboardAvoidingView from react-native-keyboard-controller handles keyboard padding natively.
+  // bottomPad is now used ONLY for emoji panel (when keyboard is closed).
   useEffect(() => {
     const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const showSub = Keyboard.addListener(showEvt, (e) => {
-      const h = e.endCoordinates?.height ?? 0;
-      kbHeightRef.current = h;
-      if (emojiOpenRef.current) {
-        // keyboard opened over emoji (user tapped input) → close emoji, settle at kb height
-        closeEmoji();
-        return;
-      }
-      const dur = Platform.OS === 'ios' ? (e.duration || 250) : 240;
-      bottomPad.value = withTiming(h, { duration: dur, easing: REasing.out(REasing.cubic) });
+    const showSub = Keyboard.addListener(showEvt, () => {
+      if (emojiOpenRef.current) closeEmoji();
     });
-    const hideSub = Keyboard.addListener(hideEvt, (e) => {
-      kbHeightRef.current = 0;
-      if (emojiOpenRef.current) return; // emoji is managing bottomPad
-      const dur = Platform.OS === 'ios' ? (e.duration || 250) : 200;
-      bottomPad.value = withTiming(0, { duration: dur, easing: REasing.out(REasing.cubic) });
-    });
-    return () => { showSub.remove(); hideSub.remove(); };
-  }, [bottomPad, closeEmoji]);
+    return () => { showSub.remove(); };
+  }, [closeEmoji]);
 
   const handlePinPress = useCallback(() => {
     if (!pins.length) return;
     const idx = pinIndexRef.current % pins.length;
     pinIndexRef.current = idx + 1;
-    const msgIndex = messages.findIndex(m => m._key === pins[idx].key);
-    if (msgIndex >= 0) {
-      flatListRef.current?.scrollToIndex({ index: msgIndex, animated: true, viewPosition: 0.3 });
+    const y = msgPositionsRef.current.get(pins[idx].key);
+    if (y !== undefined && scrollViewRef.current) {
+      scrollViewRef.current.scrollTo({ y: Math.max(0, y - headerH - pinH - 20), animated: true });
     }
-  }, [pins, messages]);
+  }, [pins, headerH, pinH]);
 
   const recorderReadyRef = useRef(false);
   const justStartedRef = useRef(false);
@@ -311,7 +374,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
     const MAX_BASE64_BYTES = 9 * 1024 * 1024; // 9 MB в base64 (лимит RTDB = 10 MB)
     const MAX_BINARY_BYTES = Math.floor(MAX_BASE64_BYTES * 0.75); // base64 раздувает на 33%
     try {
-      const info = await FileSystem.getInfoAsync(uri, { size: true });
+      const info = await FileSystem.getInfoAsync(uri);
       if (info.exists && typeof info.size === 'number' && info.size > MAX_BINARY_BYTES) {
         Alert.alert(
           'Видео слишком большое',
@@ -357,17 +420,32 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
 
   // — Send text —
   const handleSend = useCallback(async () => {
+    if (pendingAnimSticker) {
+      const aid = pendingAnimSticker;
+      setPendingAnimSticker(null);
+      setPendingSticker(null);
+      await sendAnimSticker(chatId, user, aid);
+      return;
+    }
     const t = text.trim();
+    if (pendingSticker && t === pendingSticker) {
+      setPendingSticker(null);
+      setText('');
+      await sendSticker(chatId, user, t);
+      return;
+    }
     if (!t) return;
     setText('');
     stopTyping(chatId, user);
     const reply = replyTo;
     setReplyTo(null);
     await sendMessage(chatId, user, t, reply ?? undefined);
-  }, [text, chatId, user, replyTo]);
+  }, [text, chatId, user, replyTo, pendingSticker, pendingAnimSticker]);
 
   // — Pick image —
   const handlePickImage = useCallback(async () => {
+    setPendingSticker(null);
+    setPendingAnimSticker(null);
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
     if (result.canceled || !result.assets[0]) return;
     try {
@@ -386,6 +464,8 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
   }, []);
 
   const handleReply = useCallback((msg: Message) => {
+    setPendingSticker(null);
+    setPendingAnimSticker(null);
     setReplyTo({ sender: msg.sender, text: msg.text || '' });
   }, []);
 
@@ -427,20 +507,22 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
   const handleDelete = useCallback(() => {
     if (!selectedMsg) return;
     const key = selectedMsg._key;
+    console.log('[Delete] handleDelete key=', key, 'selectedMsg=', !!selectedMsg, 'pickerVisible=', pickerVisible);
+    setThanosTargetKey(key);
     setDeletingKeys(prev => {
       if (prev.has(key)) return prev;
       const next = new Set(prev);
       next.add(key);
       return next;
     });
-    setLayoutAnimating(true);
-    if (layoutAnimTimerRef.current) clearTimeout(layoutAnimTimerRef.current);
-    layoutAnimTimerRef.current = setTimeout(() => setLayoutAnimating(false), 2400);
-  }, [selectedMsg]);
+  }, [selectedMsg, pickerVisible]);
 
   const actuallyDelete = useCallback(async (key: string) => {
+    console.log('[Delete] actuallyDelete (anim done) key=', key);
+    scrollLockUntilRef.current = Date.now() + SCROLL_LOCK_AFTER_DELETE_MS;
     try {
       await deleteMessage(chatId, key);
+      console.log('[Delete] firebase remove done key=', key);
     } finally {
       setDeletingKeys(prev => {
         if (!prev.has(key)) return prev;
@@ -448,6 +530,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
         next.delete(key);
         return next;
       });
+      setThanosTargetKey(prev => (prev === key ? null : prev));
     }
   }, [chatId]);
 
@@ -463,6 +546,8 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
     const msg = editMsg;
     setEditMsg(null);
     setText('');
+    setPendingSticker(null);
+    setPendingAnimSticker(null);
     await editMessage(chatId, msg._key, t);
   }, [editMsg, text, chatId]);
 
@@ -470,6 +555,8 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
     setText(prevTextRef.current);
     prevTextRef.current = '';
     setEditMsg(null);
+    setPendingSticker(null);
+    setPendingAnimSticker(null);
   }, []);
 
   const handleForwardPick = useCallback(async (target: ForwardTarget) => {
@@ -529,12 +616,11 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
 
   const handleChangeText = useCallback((t: string) => {
     setText(t);
+    if (pendingAnimSticker) setPendingAnimSticker(null);
+    if (pendingSticker && t !== pendingSticker) setPendingSticker(null);
     if (t.length > 0) setTyping(chatId, user);
     else stopTyping(chatId, user);
-  }, [chatId, user]);
-
-  // Reversed array для inverted FlatList — сохраняем оригинальные ссылки на объекты
-  const reversedMessages = useMemo(() => [...messages].reverse(), [messages]);
+  }, [chatId, user, pendingSticker, pendingAnimSticker]);
 
   // showSender вычисляем отдельно, не встраивая в объекты сообщений
   const showSenderMap = useMemo(() => {
@@ -553,25 +639,74 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
     if (idx >= 0) onOpenGallery(images, idx);
   }, [messages, onOpenGallery]);
 
-  const renderItem = useCallback(({ item, index }: { item: Message; index: number }) => (
-    <MessageBubble
-      message={item}
-      isMe={item.sender === user}
-      isRead={item.sender === user && typeof item.ts === 'number' && item.ts > 0 && item.ts <= maxOtherReadTs}
-      showSender={showSenderMap.get(item._key) ?? false}
-      onLongPress={handleLongPress}
-      onReactionPress={handleReactionPress}
-      onReply={handleReply}
-      onImagePress={handleImagePress}
-      bubbleColor={chatTheme?.acc}
-      peer={!isGroup && !isGeneralChat ? chatName : undefined}
-      deleting={deletingKeys.has(item._key)}
-      armed={selectedMsg?._key === item._key}
-      onDeleteAnimComplete={() => actuallyDelete(item._key)}
-    />
-  ), [user, showSenderMap, handleLongPress, handleReactionPress, handleReply, handleImagePress, chatTheme, maxOtherReadTs, isGroup, isGeneralChat, chatName, deletingKeys, actuallyDelete, selectedMsg]);
+  const renderItem = useCallback(({ item }: { item: Message; index: number }) => {
+    const isFreshlyArrived = newlyAddedKeysRef.current.has(item._key)
+      && typeof item.ts === 'number' && (Date.now() - item.ts) < 5000;
+    const bubble = (
+      <MessageBubble
+        message={item}
+        isMe={item.sender === user}
+        isRead={item.sender === user && typeof item.ts === 'number' && item.ts > 0 && item.ts <= maxOtherReadTs}
+        showSender={showSenderMap.get(item._key) ?? false}
+        onLongPress={handleLongPress}
+        onReactionPress={handleReactionPress}
+        onReply={handleReply}
+        onImagePress={handleImagePress}
+        bubbleColor={chatTheme?.acc}
+        peer={!isGroup && !isGeneralChat ? chatName : undefined}
+        registerBubbleRef={registerBubbleRef}
+      />
+    );
+    if (isFreshlyArrived) {
+      return <Reanimated.View entering={ENTER_ANIM}>{bubble}</Reanimated.View>;
+    }
+    return bubble;
+  }, [user, showSenderMap, handleLongPress, handleReactionPress, handleReply, handleImagePress, chatTheme, maxOtherReadTs, isGroup, isGeneralChat, chatName, registerBubbleRef]);
 
   const keyExtractor = useCallback((item: Message) => item._key, []);
+
+  const handleListScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+    const distFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
+    isNearBottomRef.current = distFromBottom < 80;
+    // Pagination: chronological list, near top = oldest. Trigger to load older.
+    if (contentOffset.y < 200 && hasMore && !paginationCooldownRef.current && messages.length >= pageSize) {
+      paginationCooldownRef.current = true;
+      console.log('[Pagination] BUMP pageSize from', pageSize, 'to', pageSize + 50);
+      setPageSize(prev => prev + 50);
+    }
+  }, [hasMore, messages.length, pageSize]);
+
+  const handleContentSizeChange = useCallback((_w: number, h: number) => {
+    if (!scrollViewRef.current) return;
+    const prev = prevContentHeightRef.current;
+    const delta = h - prev;
+    prevContentHeightRef.current = h;
+    const lastMsg = messages[messages.length - 1];
+    const lastTs = typeof lastMsg?.ts === 'number' ? lastMsg.ts : 0;
+    const prevLastTs = lastBottomTsRef.current;
+    const isNewBottomMsg = lastTs > prevLastTs;
+    lastBottomTsRef.current = lastTs;
+
+    const now = Date.now();
+    const lockTs = scrollLockUntilRef.current;
+    const locked = now < lockTs;
+    console.log('[List] h=', Math.round(h), 'Δ=', Math.round(delta), 'msgs=', messages.length, 'pageSize=', pageSize, 'newBottom=', isNewBottomMsg, 'locked=', locked, 'lockMs=', lockTs ? (lockTs - now) : 0);
+
+    if (!initialScrollDoneRef.current) {
+      initialScrollDoneRef.current = true;
+      scrollViewRef.current?.scrollToEnd({ animated: false });
+      Animated.timing(listOpacity, { toValue: 1, duration: 250, useNativeDriver: true }).start();
+      return;
+    }
+    if (locked) return;
+    // Auto-scroll only when a new message actually arrived AT THE BOTTOM (lastTs increased).
+    // Older messages pulled into the window from above, deletes, edits — do NOT trigger auto-scroll.
+    if (isNewBottomMsg && isNearBottomRef.current) {
+      console.log('[List] scrollToEnd (newBottom, nearBottom)');
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }
+  }, [listOpacity, messages, pageSize]);
 
 
   const avatarBg = isGeneralChat ? theme.accent : isGroup ? '#00B894' : getAvatarColor(chatName);
@@ -585,11 +720,11 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
 
   return (
     <GestureHandlerRootView style={[styles.container, chatTheme && { backgroundColor: '#0a0a1a' }]}>
-      <Reanimated.View style={[styles.content, contentAnimStyle]}>
+      <KeyboardAvoidingView behavior="padding" style={styles.content}>
+        <Reanimated.View style={[styles.content, contentAnimStyle]}>
         {/* Header */}
-        <BlurView
-          intensity={60} tint="dark" experimentalBlurMethod="dimezisBlurView"
-          style={[styles.header, styles.headerAbs]}
+        <View
+          style={[styles.header, styles.headerAbs, { backgroundColor: theme.bg2 }]}
           onLayout={(e) => setHeaderH(e.nativeEvent.layout.height)}
         >
           <TouchableOpacity onPress={onBack} style={styles.headerBtn} activeOpacity={0.6}>
@@ -644,58 +779,66 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
               <Text style={styles.menuDots}>⋮</Text>
             </TouchableOpacity>
           )}
-        </BlurView>
+        </View>
 
         {/* Pin bar */}
         {pins && pins.length > 0 && (
-          <BlurView
-            intensity={60} tint="dark" experimentalBlurMethod="dimezisBlurView"
-            style={[styles.pinBarWrap, styles.pinBarAbs, { top: headerH }]}
+          <View
+            style={[styles.pinBarWrap, styles.pinBarAbs, { top: headerH, backgroundColor: theme.bg2 }]}
             onLayout={(e) => setPinH(e.nativeEvent.layout.height)}
           >
             <PinBar pins={pins} onPress={handlePinPress} />
-          </BlurView>
+          </View>
         )}
 
         {/* Messages + reply bar (absolute поверх списка) */}
         <Animated.View style={[styles.listWrap, { opacity: listOpacity }]}>
-          <Reanimated.FlatList
-            ref={flatListRef as any}
-            data={reversedMessages}
-            keyExtractor={keyExtractor}
-            renderItem={renderItem}
-            extraData={deletingKeys}
-            itemLayoutAnimation={layoutAnimating ? LinearTransition.duration(300) : undefined}
-            inverted
-            onScroll={(e) => {
-              isNearBottomRef.current = e.nativeEvent.contentOffset.y < 80;
-            }}
-            scrollEventThrottle={100}
+          <ScrollView
+            ref={scrollViewRef}
+            onScroll={handleListScroll}
+            scrollEventThrottle={16}
             onContentSizeChange={handleContentSizeChange}
-            maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
             style={styles.list}
-            contentContainerStyle={[
-              styles.listContent,
-              {
-                paddingTop: 12 + inputH + (editMsg ? editH : 0) + (replyTo ? replyH : 0),
-                paddingBottom: 12 + headerH + pinH,
-              },
-            ]}
-            maxToRenderPerBatch={10}
-            windowSize={10}
-            initialNumToRender={20}
-            ListEmptyComponent={
-              <View style={styles.emptyWrap}>
-                <Text style={styles.emptyText}>Начните общение 👋</Text>
-              </View>
-            }
-          />
+            contentContainerStyle={{
+              paddingTop: 12 + headerH + pinH,
+              paddingBottom: 12 + inputH + (editMsg ? editH : 0) + (replyTo ? replyH : 0),
+              minHeight: 1, // ensure contentContainer is always measurable
+            }}
+          >
+            {messages.length === 0 ? <ChatEmpty /> : messages.map((item, index) => {
+              const isFreshlyArrived = newlyAddedKeysRef.current.has(item._key)
+                && typeof item.ts === 'number' && (Date.now() - item.ts) < 5000;
+              const onLayout = (e: any) => {
+                msgPositionsRef.current.set(item._key, e.nativeEvent.layout.y);
+              };
+              const bubble = (
+                <MessageBubble
+                  message={item}
+                  isMe={item.sender === user}
+                  isRead={item.sender === user && typeof item.ts === 'number' && item.ts > 0 && item.ts <= maxOtherReadTs}
+                  showSender={showSenderMap.get(item._key) ?? false}
+                  onLongPress={handleLongPress}
+                  onReactionPress={handleReactionPress}
+                  onReply={handleReply}
+                  onImagePress={handleImagePress}
+                  bubbleColor={chatTheme?.acc}
+                  peer={!isGroup && !isGeneralChat ? chatName : undefined}
+                  registerBubbleRef={registerBubbleRef}
+                />
+              );
+              return (
+                <View key={item._key} onLayout={onLayout}>
+                  {isFreshlyArrived ? <Reanimated.View entering={ENTER_ANIM}>{bubble}</Reanimated.View> : bubble}
+                  {index < messages.length - 1 && <MessageSeparator />}
+                </View>
+              );
+            })}
+          </ScrollView>
         </Animated.View>
 
         {editMsg && (
-          <BlurView
-            intensity={60} tint="dark" experimentalBlurMethod="dimezisBlurView"
-            style={[styles.editBar, styles.barAbs, { bottom: inputH }]}
+          <View
+            style={[styles.editBar, styles.barAbs, { bottom: inputH, backgroundColor: theme.bg2 }]}
             onLayout={(e) => setEditH(e.nativeEvent.layout.height)}
           >
             <IconCtxEdit size={28} color={theme.accent} />
@@ -706,13 +849,31 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
             <TouchableOpacity onPress={handleEditCancel} style={styles.editBarClose}>
               <IconClose size={16} color={theme.text2} />
             </TouchableOpacity>
-          </BlurView>
+          </View>
+        )}
+
+        {pendingAnimSticker && (
+          <View
+            style={[styles.animBar, styles.barAbs, { bottom: inputH + (editMsg ? editH : 0) + (replyTo ? replyH : 0), backgroundColor: theme.bg2 }]}
+          >
+            <View style={styles.animBarIcon}>
+              <Text style={{ fontSize: 18 }}>✨</Text>
+            </View>
+            <View style={styles.animBarContent}>
+              <Text style={styles.animBarLabel}>Живой стикер</Text>
+              <Text style={styles.animBarName} numberOfLines={1}>
+                {ANIM_STICKERS.find(s => s.id === pendingAnimSticker)?.name || ''}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => setPendingAnimSticker(null)} style={styles.animBarClose}>
+              <IconClose size={16} color={theme.text2} />
+            </TouchableOpacity>
+          </View>
         )}
 
         {replyTo && (
-          <BlurView
-            intensity={60} tint="dark" experimentalBlurMethod="dimezisBlurView"
-            style={[styles.replyBar, styles.barAbs, { bottom: inputH + (editMsg ? editH : 0) }]}
+          <View
+            style={[styles.replyBar, styles.barAbs, { bottom: inputH + (editMsg ? editH : 0) + (pendingAnimSticker ? 48 : 0), backgroundColor: theme.bg2 }]}
             onLayout={(e) => setReplyH(e.nativeEvent.layout.height)}
           >
             <View style={styles.replyBarIcon}>
@@ -725,7 +886,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
             <TouchableOpacity onPress={() => setReplyTo(null)} style={styles.replyBarClose}>
               <IconClose size={16} color={theme.text2} />
             </TouchableOpacity>
-          </BlurView>
+          </View>
         )}
 
         {/* Input bar — always rendered. TextInput stays mounted to keep keyboard open during recording. */}
@@ -863,7 +1024,23 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
             onCancel={() => setVideoRecording(false)}
           />
         )}
-      </Reanimated.View>
+        </Reanimated.View>
+      </KeyboardAvoidingView>
+
+      {/* Singleton ThanosSnap: ONE instance for the whole chat. Captures + animates over the
+          long-pressed / deleting bubble using its registered ref + measureInWindow position. */}
+      {(() => {
+        const targetKey = thanosTargetKey ?? selectedMsg?._key ?? null;
+        const bubbleRef = targetKey ? bubbleRefsMap.current.get(targetKey) : null;
+        return (
+          <ThanosSnap
+            bubbleRef={bubbleRef}
+            armed={!!selectedMsg && !!bubbleRef}
+            active={!!thanosTargetKey && !!bubbleRef && deletingKeys.has(thanosTargetKey)}
+            onComplete={() => { if (thanosTargetKey) actuallyDelete(thanosTargetKey); }}
+          />
+        );
+      })()}
 
       {/* Emoji panel: absolute at bottom, slides up via translateY (native driver) */}
       <Animated.View
@@ -875,8 +1052,8 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
       >
         <EmojiPanel
           onEmoji={(e) => setText(t => t + e)}
-          onSticker={(s) => { closeEmoji(); sendSticker(chatId, user, s); }}
-          onAnimSticker={(id) => { closeEmoji(); sendAnimSticker(chatId, user, id); }}
+          onSticker={(s) => { setPendingSticker(s); setText(s); closeEmoji(); }}
+          onAnimSticker={(id) => { setPendingAnimSticker(id); closeEmoji(); }}
         />
       </Animated.View>
     </GestureHandlerRootView>
@@ -911,7 +1088,6 @@ const styles = StyleSheet.create({
 
   listWrap: { flex: 1 },
   list: { flex: 1 },
-  listContent: { gap: 3 },
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60 },
   emptyText: { color: theme.text3, fontSize: 15 },
 
@@ -940,6 +1116,20 @@ const styles = StyleSheet.create({
   replyBarAuthor: { fontSize: 13, color: theme.accent, fontWeight: '700', marginBottom: 1 },
   replyBarText: { fontSize: 13, color: theme.text2 },
   replyBarClose: { padding: 4, flexShrink: 0 },
+
+  /* animBar — pending animated sticker */
+  animBar: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderTopWidth: 1, borderTopColor: theme.border,
+    gap: 8,
+    overflow: 'hidden',
+  },
+  animBarIcon: { flexShrink: 0, alignItems: 'center', justifyContent: 'center', width: 28, height: 28 },
+  animBarContent: { flex: 1, minWidth: 0 },
+  animBarLabel: { fontSize: 13, color: theme.accent, fontWeight: '700', marginBottom: 1 },
+  animBarName: { fontSize: 13, color: theme.text2 },
+  animBarClose: { padding: 4, flexShrink: 0 },
 
   /* inb — always-rendered input bar container */
   inb: {
