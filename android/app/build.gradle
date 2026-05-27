@@ -87,7 +87,7 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.romanlg.mostnative'
+    namespace 'com.rl.most'
     defaultConfig {
         applicationId 'com.rl.most'
         minSdkVersion rootProject.ext.minSdkVersion

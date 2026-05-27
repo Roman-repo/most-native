@@ -1,4 +1,4 @@
-package com.romanlg.mostnative
+package com.rl.most
 
 import android.app.Application
 import android.content.res.Configuration

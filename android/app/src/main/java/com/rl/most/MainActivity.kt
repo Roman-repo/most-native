@@ -1,4 +1,4 @@
-package com.romanlg.mostnative
+package com.rl.most
 
 import android.os.Build
 import android.os.Bundle

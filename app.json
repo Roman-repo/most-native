@@ -41,10 +41,15 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "updates": {
+      "url": "https://u.expo.dev/4460cb6f-65a4-4548-8ae3-58daaa7bbaf6",
+      "checkAutomatically": "ON_LOAD"
+    },
     "plugins": [
       "expo-audio",
       "expo-video",
-      "expo-notifications"
+      "expo-notifications",
+      "expo-updates"
     ],
     "extra": {
       "eas": {
