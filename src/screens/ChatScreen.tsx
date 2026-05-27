@@ -796,22 +796,19 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
           <ScrollView
             ref={scrollViewRef}
             onScroll={handleListScroll}
-            scrollEventThrottle={16}
+            scrollEventThrottle={32}
             onContentSizeChange={handleContentSizeChange}
+            removeClippedSubviews={true}
+            overScrollMode="never"
             style={styles.list}
             contentContainerStyle={{
               paddingTop: 12 + headerH + pinH,
               paddingBottom: 12 + inputH + (editMsg ? editH : 0) + (replyTo ? replyH : 0),
-              minHeight: 1, // ensure contentContainer is always measurable
+              minHeight: 1,
             }}
           >
-            {messages.length === 0 ? <ChatEmpty /> : messages.map((item, index) => {
-              const isFreshlyArrived = newlyAddedKeysRef.current.has(item._key)
-                && typeof item.ts === 'number' && (Date.now() - item.ts) < 5000;
-              const onLayout = (e: any) => {
-                msgPositionsRef.current.set(item._key, e.nativeEvent.layout.y);
-              };
-              const bubble = (
+            {messages.length === 0 ? <ChatEmpty /> : messages.map((item, index) => (
+              <View key={item._key}>
                 <MessageBubble
                   message={item}
                   isMe={item.sender === user}
@@ -825,14 +822,9 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
                   peer={!isGroup && !isGeneralChat ? chatName : undefined}
                   registerBubbleRef={registerBubbleRef}
                 />
-              );
-              return (
-                <View key={item._key} onLayout={onLayout}>
-                  {isFreshlyArrived ? <Reanimated.View entering={ENTER_ANIM}>{bubble}</Reanimated.View> : bubble}
-                  {index < messages.length - 1 && <MessageSeparator />}
-                </View>
-              );
-            })}
+                {index < messages.length - 1 && <MessageSeparator />}
+              </View>
+            ))}
           </ScrollView>
         </Animated.View>
 

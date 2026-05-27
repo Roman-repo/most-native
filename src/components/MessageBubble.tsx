@@ -1,11 +1,10 @@
 import { useRef, useState, useCallback, useEffect, memo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { IconPlay, IconPause } from './Icons';
 import CallBubble from './CallBubble';
 import { base64ToTempFile } from '../managers/MediaManager';
-import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import AnimStickerWebView from './AnimStickerWebView';
 import { theme } from '../styles/theme';
@@ -46,7 +45,7 @@ function formatTime(ts: number): string {
   return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
 }
 
-const SWIPE_THRESHOLD = 60;
+// const SWIPE_THRESHOLD = 60; // disabled for performance
 
 const SPEEDS = [1, 1.5, 2];
 
@@ -204,14 +203,7 @@ function VideoBubble({ url, duration, msgKey }: { url: string; duration: string;
 }
 
 const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, showSender, onLongPress, onReactionPress, onReply, onImagePress, bubbleColor, peer, deleting, registerBubbleRef }: Props) {
-  const translateX = useRef(new Animated.Value(0)).current;
-  const replyOpacity = useRef(new Animated.Value(0)).current;
   const outerViewRef = useRef<any>(null);
-
-  useEffect(() => {
-    translateX.setValue(0);
-    replyOpacity.setValue(0);
-  }, [m._key]);
 
   // Register outer View ref with parent so singleton ThanosSnap can capture it
   useEffect(() => {
@@ -232,59 +224,18 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
   }
   const reactionEntries = Object.entries(reactionMap);
 
-  const onGestureEvent = Animated.event(
-    [{ nativeEvent: { translationX: translateX } }],
-    { useNativeDriver: true },
-  );
-
-  const onHandlerStateChange = (event: any) => {
-    const { state, translationX } = event.nativeEvent;
-    if (state === State.ACTIVE) {
-      const clamped = Math.min(0, Math.max(translationX, -SWIPE_THRESHOLD));
-      const progress = -clamped / SWIPE_THRESHOLD;
-      replyOpacity.setValue(progress);
-    }
-    if (state === State.END || state === State.CANCELLED || state === State.FAILED) {
-      if (translationX <= -SWIPE_THRESHOLD) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft).catch(() => {});
-        onReply(m);
-      }
-      Animated.parallel([
-        Animated.spring(translateX, { toValue: 0, useNativeDriver: true, tension: 120, friction: 8 }),
-        Animated.timing(replyOpacity, { toValue: 0, duration: 150, useNativeDriver: true }),
-      ]).start();
-    }
-  };
-
-  const clampedTranslate = translateX.interpolate({
-    inputRange: [-(SWIPE_THRESHOLD + 40), -SWIPE_THRESHOLD, 0],
-    outputRange: [-(SWIPE_THRESHOLD + 10), -SWIPE_THRESHOLD, 0],
-    extrapolate: 'clamp',
-  });
+  const handleLongPressBubble = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft).catch(() => {});
+    onLongPress(m);
+  }, [m, onLongPress]);
 
   return (
-    <PanGestureHandler
-      onGestureEvent={onGestureEvent}
-      onHandlerStateChange={onHandlerStateChange}
-      activeOffsetX={-10}
-      failOffsetY={[-10, 10]}
+    <View
+      ref={outerViewRef}
+      collapsable={false}
+      style={[styles.row, isMe ? styles.rowMe : styles.rowOther, deleting && { opacity: 0 }]}
     >
-      <Animated.View
-        ref={outerViewRef}
-        collapsable={false}
-        style={[styles.row, isMe ? styles.rowMe : styles.rowOther, deleting && { opacity: 0 }]}
-      >
-        {/* Reply icon hint */}
-        <Animated.View style={[
-          styles.replyHint,
-          isMe ? styles.replyHintMe : styles.replyHintOther,
-          { opacity: replyOpacity },
-        ]}>
-          <Text style={styles.replyHintIcon}>↩️</Text>
-        </Animated.View>
-
-        <Animated.View style={{ transform: [{ translateX: clampedTranslate }] }}>
-          <TouchableOpacity activeOpacity={0.85} onPress={() => onLongPress(m)}>
+      <TouchableOpacity activeOpacity={0.85} onLongPress={handleLongPressBubble}>
             {showSender && !isMe && (
               <Text style={[styles.senderName, { color: senderColor(m.sender) }]}>{m.sender}</Text>
             )}
@@ -373,10 +324,8 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
                   </View>
               );
             })()}
-          </TouchableOpacity>
-        </Animated.View>
-      </Animated.View>
-    </PanGestureHandler>
+      </TouchableOpacity>
+    </View>
   );
 }, (prev, next) =>
   prev.message._key === next.message._key &&
@@ -407,10 +356,6 @@ const styles = StyleSheet.create({
   rowMe: { alignSelf: 'flex-end' },
   rowOther: { alignSelf: 'flex-start' },
 
-  replyHint: { position: 'absolute', top: '50%', marginTop: -14, zIndex: 1 },
-  replyHintMe: { right: -32 },
-  replyHintOther: { left: -32 },
-  replyHintIcon: { fontSize: 20 },
 
   senderName: {
     fontSize: 13,
