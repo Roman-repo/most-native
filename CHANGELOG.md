@@ -53,6 +53,8 @@
 - `AGENTS.md` — git workflow, conventional commits, rollback policy, AI agent rules.
 
 **Критерий готовности:**
+- **Свайп вправо для ответа (REQ-10):**
+  - `src/components/MessageBubble.tsx` — `GestureDetector` + `Gesture.Pan()` из `react-native-gesture-handler` v2. Сообщение следует за пальцем через `useSharedValue` / `useAnimatedStyle`. Иконка ↩ (`IconReply`) появляется слева с анимацией `opacity` + `scale`. При отпускании после 60px — вызывается `onReply(m)`, reply bar открывается с цитатой. При отпускании раньше — возврат `withSpring(0)`. Короткий тап без сдвига по-прежнему открывает контекстное меню.
 - Скролл чата плавный, как в веб-версии — никаких рывков и подрагиваний
 - Удаление пузыря — ThanosSnap анимация, соседние сообщения не прыгают
 - Открытие/закрытие клавиатуры — инпут движется синхронно с нативной анимацией
