@@ -174,7 +174,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
   const scrollViewRef = useRef<ScrollView>(null);
   const msgPositionsRef = useRef<Map<string, { y: number; height: number }>>(new Map());
   const isNearBottomRef = useRef(true);
-  const pinIndexRef = useRef(0);
+  const [pinIndex, setPinIndex] = useState(0);
   const listOpacity = useRef(new Animated.Value(0)).current;
   const initialLoadRef = useRef(false);
   const loadStartRef = useRef(0);
@@ -379,13 +379,13 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
 
   const handlePinPress = useCallback(() => {
     if (!pins.length) return;
-    const idx = pinIndexRef.current % pins.length;
-    pinIndexRef.current = idx + 1;
+    const idx = pinIndex % pins.length;
+    setPinIndex((idx + 1) % pins.length);
     const pos = msgPositionsRef.current.get(pins[idx].key);
     if (pos && scrollViewRef.current) {
       scrollViewRef.current.scrollTo({ y: Math.max(0, pos.y - headerH - pinH - 20), animated: true });
     }
-  }, [pins, headerH, pinH]);
+  }, [pins, pinIndex, headerH, pinH]);
 
   const recorderReadyRef = useRef(false);
   const justStartedRef = useRef(false);
@@ -1127,7 +1127,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
             style={[styles.pinBarWrap, styles.pinBarAbs, { top: headerH, backgroundColor: theme.bg2 }]}
             onLayout={(e) => setPinH(e.nativeEvent.layout.height)}
           >
-            <PinBar pins={pins} onPress={handlePinPress} />
+            <PinBar pins={pins} currentIndex={pinIndex} onPress={handlePinPress} />
           </View>
         )}
 
