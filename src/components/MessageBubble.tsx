@@ -420,9 +420,9 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
                       </Text>
                     ) : null}
                     {needsExpand && (
-                      <TouchableOpacity onPress={() => setExpanded(v => !v)} activeOpacity={0.7}>
-                        <Text style={styles.expandBtn}>{expanded ? 'Свернуть' : 'Читать далее'}</Text>
-                      </TouchableOpacity>
+                      <Text style={styles.expandBtn} onPress={() => setExpanded(v => !v)}>
+                        {expanded ? 'Свернуть' : 'Читать далее'}
+                      </Text>
                     )}
                     {reactionEntries.length > 0 ? (
                       <View style={styles.metaRow}>
