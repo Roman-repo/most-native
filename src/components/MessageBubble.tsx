@@ -312,7 +312,7 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
       style={[styles.row, isMe ? styles.rowMe : styles.rowOther, m.image && styles.rowImage, deleting && { opacity: 0 }]}
       onLayout={handleLayout}
     >
-      <TouchableOpacity activeOpacity={0.85} onLongPress={handleLongPressBubble}>
+      <TouchableOpacity activeOpacity={0.85} onPress={() => onLongPress(m)}>
             {showSender && !isMe && (
               <Text style={[styles.senderName, { color: senderColor(m.sender) }]}>{m.sender}</Text>
             )}
@@ -389,10 +389,12 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
                 </View>
               </View>
             )}
+      </TouchableOpacity>
             {!m.sticker && !m.animSticker && !m.image && !m.audio && !m.vidMsg && !m.file && !m.contactName && (() => {
               const timeStr = formatTime(m.ts);
               return (
                 <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther, isMe && bubbleColor ? { backgroundColor: bubbleColor, shadowColor: bubbleColor } : undefined]}>
+                  <TouchableOpacity activeOpacity={0.85} onPress={() => onLongPress(m)}>
                     {m.forwarded && (
                       <Text style={styles.forwarded}>↪ Переслано от {m.forwarded}</Text>
                     )}
@@ -419,44 +421,43 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
                         }}
                       >
                         {m.text}
+                        {reactionEntries.length === 0 && !needsExpand && <Text style={styles.timeSpacer}>{'\u00A0'.repeat(Math.ceil((( m.edited ? 5 : 0) + timeStr.length + (isMe ? 3 : 0)) * 1.4) + 3)}</Text>}
                       </Text>
                     ) : null}
-                    {needsExpand && (
-                      <Text style={styles.expandBtn} onPress={() => setExpanded(v => !v)}>
-                        {expanded ? 'Свернуть' : 'Читать далее'}
-                      </Text>
-                    )}
-                    {reactionEntries.length > 0 || needsExpand ? (
-                      <View style={styles.metaRow}>
-                        {reactionEntries.length > 0 && (
-                          <View style={styles.metaReactions}>
-                            {reactionEntries.map(([emoji, count]) => (
-                              <AnimatedReactionBadge
-                                key={emoji}
-                                emoji={emoji}
-                                count={count}
-                                onPress={() => onReactionPress(m._key, emoji)}
-                              />
-                            ))}
-                          </View>
-                        )}
-                        <View style={[styles.metaTime, reactionEntries.length === 0 && { marginLeft: 'auto' }]}>
-                          {m.edited && <Text style={styles.edited}>изм. </Text>}
-                          <Text style={[styles.time, isMe ? styles.timeMe : styles.timeOther]}>{timeStr}</Text>
-                          {isMe && <CheckMark read={isRead} onPress={readersPress} />}
-                        </View>
+                  </TouchableOpacity>
+                  {needsExpand && (
+                    <Text style={styles.expandBtn} onPress={() => setExpanded(v => !v)}>
+                      {expanded ? 'Свернуть' : 'Читать далее'}
+                    </Text>
+                  )}
+                  {reactionEntries.length > 0 ? (
+                    <View style={styles.metaRow}>
+                      <View style={styles.metaReactions}>
+                        {reactionEntries.map(([emoji, count]) => (
+                          <AnimatedReactionBadge
+                            key={emoji}
+                            emoji={emoji}
+                            count={count}
+                            onPress={() => onReactionPress(m._key, emoji)}
+                          />
+                        ))}
                       </View>
-                    ) : (
-                      <View style={styles.timeInline} pointerEvents="none">
+                      <View style={styles.metaTime}>
                         {m.edited && <Text style={styles.edited}>изм. </Text>}
                         <Text style={[styles.time, isMe ? styles.timeMe : styles.timeOther]}>{timeStr}</Text>
                         {isMe && <CheckMark read={isRead} onPress={readersPress} />}
                       </View>
-                    )}
-                  </View>
+                    </View>
+                  ) : (
+                    <View style={styles.timeInline} pointerEvents="none">
+                      {m.edited && <Text style={styles.edited}>изм. </Text>}
+                      <Text style={[styles.time, isMe ? styles.timeMe : styles.timeOther]}>{timeStr}</Text>
+                      {isMe && <CheckMark read={isRead} onPress={readersPress} />}
+                    </View>
+                  )}
+                </View>
               );
             })()}
-      </TouchableOpacity>
     </View>
     </Swipeable>
   );
@@ -546,7 +547,7 @@ const styles = StyleSheet.create({
   forwarded: { fontSize: 12, fontStyle: 'italic', color: 'rgba(255,255,255,0.7)', marginBottom: 4 },
 
   text: { fontSize: 16, lineHeight: 20.8, color: '#ffffff' },
-  expandBtn: { fontSize: 14, color: theme.accent, fontWeight: '600', marginTop: 4, marginBottom: 2 },
+  expandBtn: { fontSize: 14, color: '#ffffff', fontStyle: 'italic', marginTop: 4, marginBottom: 2 },
 
   meta: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', marginTop: 3, gap: 2 },
   metaImage: { position: 'absolute', right: 8, bottom: 6, marginTop: 0 },
