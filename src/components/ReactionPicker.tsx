@@ -1,12 +1,13 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import React from 'react';
 import {
-  View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet,
+  View, Text, TouchableOpacity, Modal, StyleSheet,
   Dimensions, Animated, Easing,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { theme } from '../styles/theme';
-import { QUICK_REACTIONS, ALL_EMOJIS } from '../utils/emoji';
+import { QUICK_REACTIONS } from '../utils/emoji';
+import EmojiPickerModal from './EmojiPickerModal';
 import {
   IconCtxReply, IconCtxCopy, IconCtxForward, IconCtxPin,
   IconCtxEdit, IconCtxDelete, IconCtxPrivate,
@@ -40,11 +41,11 @@ export default function ReactionPicker({
   const scale = useRef(new Animated.Value(0.92)).current;
   const translateY = useRef(new Animated.Value(8)).current;
   const opacity = useRef(new Animated.Value(0)).current;
-  const [showAllEmoji, setShowAllEmoji] = useState(false);
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
 
   useLayoutEffect(() => {
     if (visible) {
-      setShowAllEmoji(false);
+      setEmojiPickerOpen(false);
       scale.setValue(0.92); translateY.setValue(8); opacity.setValue(0);
       Animated.parallel([
         Animated.timing(scale, { toValue: 1, duration: 180, easing: Easing.out(Easing.quad), useNativeDriver: true }),
@@ -78,22 +79,16 @@ export default function ReactionPicker({
                 <Text style={styles.qrEmoji}>{e}</Text>
               </TouchableOpacity>
             ))}
-            <TouchableOpacity style={styles.qrMoreBtn} onPress={() => setShowAllEmoji(v => !v)}>
+            <TouchableOpacity style={styles.qrMoreBtn} onPress={() => setEmojiPickerOpen(true)}>
               <Text style={styles.qrMoreTxt}>{ICON_PLUS}</Text>
             </TouchableOpacity>
           </View>
 
-          {showAllEmoji && (
-            <View style={styles.allEmojiWrap}>
-              <ScrollView contentContainerStyle={styles.allEmojiContent}>
-                {ALL_EMOJIS.map((e, i) => (
-                  <TouchableOpacity key={`${e}_${i}`} onPress={() => { onReact(e); close(); }}>
-                    <Text style={styles.allEmojiItem}>{e}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-          )}
+          <EmojiPickerModal
+            visible={emojiPickerOpen}
+            onClose={() => setEmojiPickerOpen(false)}
+            onSelect={(emoji) => { onReact(emoji); close(); }}
+          />
 
           {/* Пункты меню */}
           <MenuItem icon={<IconCtxReply size={20} color={theme.text} />} label="Ответить" onPress={handle(onReply)} />
@@ -159,14 +154,6 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   qrMoreTxt: { fontSize: 16, color: theme.text2, fontWeight: '600' },
-
-  allEmojiWrap: {
-    maxHeight: 200,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
-  },
-  allEmojiContent: { flexDirection: 'row', flexWrap: 'wrap', padding: 6 },
-  allEmojiItem: { fontSize: 24, padding: 5 },
 
   /* .cti — padding 12/16, font-size 16, border-radius 8 */
   cti: {

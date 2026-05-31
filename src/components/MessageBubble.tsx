@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback, useEffect, memo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Animated } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { VideoView, useVideoPlayer } from 'expo-video';
@@ -215,8 +215,40 @@ function VideoBubble({ url, duration, msgKey }: { url: string; duration: string;
   );
 }
 
+function AnimatedReactionBadge({ emoji, count, onPress }: { emoji: string; count: number; onPress: () => void }) {
+  const scale = useRef(new Animated.Value(0)).current;
+  const pulse = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.spring(scale, { toValue: 1, friction: 6, useNativeDriver: true }).start();
+  }, []);
+
+  const handlePress = useCallback(() => {
+    Animated.sequence([
+      Animated.timing(pulse, { toValue: 1.35, duration: 120, useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 1, duration: 180, useNativeDriver: true }),
+    ]).start();
+    onPress();
+  }, [onPress, pulse]);
+
+  const animScale = Animated.multiply(scale, pulse);
+
+  return (
+    <TouchableOpacity onPress={handlePress} activeOpacity={0.8}>
+      <Animated.View style={[styles.reactionBadge, { transform: [{ scale: animScale }] }]}>
+        <Text style={styles.reactionEmoji}>{emoji}</Text>
+        {count > 1 && <Text style={styles.reactionCount}>{count}</Text>}
+      </Animated.View>
+    </TouchableOpacity>
+  );
+}
+
+const MAX_LINES = 8;
+
 const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, showSender, onLongPress, onReactionPress, onReply, onImagePress, bubbleColor, peer, deleting, registerBubbleRef, onLayoutBubble, onShowReaders, isGroup }: Props) {
   const outerViewRef = useRef<any>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [needsExpand, setNeedsExpand] = useState(false);
 
   // Register outer View ref with parent so singleton ThanosSnap can capture it
   useEffect(() => {
@@ -374,19 +406,34 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
                       </View>
                     )}
                     {m.text ? (
-                      <Text style={styles.text}>
+                      <Text
+                        style={styles.text}
+                        numberOfLines={expanded ? undefined : MAX_LINES}
+                        onTextLayout={(e) => {
+                          if (!expanded && e.nativeEvent.lines.length > MAX_LINES) {
+                            setNeedsExpand(true);
+                          }
+                        }}
+                      >
                         {m.text}
-                        {reactionEntries.length === 0 && <Text style={styles.timeSpacer}>{'\u00A0'.repeat(Math.ceil((( m.edited ? 5 : 0) + timeStr.length + (isMe ? 3 : 0)) * 1.4) + 3)}</Text>}
+                        {reactionEntries.length === 0 && !needsExpand && <Text style={styles.timeSpacer}>{'\u00A0'.repeat(Math.ceil((( m.edited ? 5 : 0) + timeStr.length + (isMe ? 3 : 0)) * 1.4) + 3)}</Text>}
                       </Text>
                     ) : null}
+                    {needsExpand && (
+                      <TouchableOpacity onPress={() => setExpanded(v => !v)} activeOpacity={0.7}>
+                        <Text style={styles.expandBtn}>{expanded ? 'Свернуть' : 'Читать далее'}</Text>
+                      </TouchableOpacity>
+                    )}
                     {reactionEntries.length > 0 ? (
                       <View style={styles.metaRow}>
                         <View style={styles.metaReactions}>
                           {reactionEntries.map(([emoji, count]) => (
-                            <TouchableOpacity key={emoji} style={styles.reactionBadge} onPress={() => onReactionPress(m._key, emoji)}>
-                              <Text style={styles.reactionEmoji}>{emoji}</Text>
-                              {count > 1 && <Text style={styles.reactionCount}>{count}</Text>}
-                            </TouchableOpacity>
+                            <AnimatedReactionBadge
+                              key={emoji}
+                              emoji={emoji}
+                              count={count}
+                              onPress={() => onReactionPress(m._key, emoji)}
+                            />
                           ))}
                         </View>
                         <View style={styles.metaTime}>
@@ -495,6 +542,7 @@ const styles = StyleSheet.create({
   forwarded: { fontSize: 12, fontStyle: 'italic', color: 'rgba(255,255,255,0.7)', marginBottom: 4 },
 
   text: { fontSize: 16, lineHeight: 20.8, color: '#ffffff' },
+  expandBtn: { fontSize: 14, color: theme.accent, fontWeight: '600', marginTop: 4, marginBottom: 2 },
 
   meta: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', marginTop: 3, gap: 2 },
   metaImage: { position: 'absolute', right: 8, bottom: 6, marginTop: 0 },
