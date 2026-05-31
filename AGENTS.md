@@ -36,7 +36,12 @@ This signals: **EAS Build required**, OTA update is not enough.
 3. **Before complex refactoring** — make a checkpoint commit: `chore: checkpoint before header redesign`.
 4. **If user says "rollback"** — use `git checkout` or `git revert`, never manual line-by-line rollback.
 5. **No force-push** to `main` / `dev`.
-6. **When user says "закрывай фичу" (close the feature):**
+6. **New features go on new branches:**
+   - Each feature gets its own branch: `feat/{VERSION}-{short-desc}`.
+   - Branch numbering follows release order (e.g., `feat/4.17.0-...`, `feat/4.17.1-...`, `feat/4.18.0-...`).
+   - Create branch with `git checkout -b feat/X.Y.Z-description` before committing.
+7. **When user says "закрывай фичу" (close the feature):**
+   - Ensure you are on the feature branch.
    - Run `git add -A && git commit -m "feat: ..."` (or `fix:` / `refactor:` depending on the work).
    - Update `CHANGELOG.md` with a new entry describing what was done.
    - Commit message and CHANGELOG entry must reference any related REQ numbers.
