@@ -39,7 +39,7 @@ export default function CallBubble({ message, peer }: Props) {
     >
       <View style={styles.bubble}>
         <View style={styles.info}>
-          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.title} numberOfLines={1}>{title}</Text>
           <View style={styles.meta}>
             {outgoing
               ? <IconCallOut size={12} color={arrowColor} />
@@ -82,8 +82,7 @@ const styles = StyleSheet.create({
     minWidth: 180,
   },
   info: {
-    flex: 1,
-    minWidth: 0,
+    flexShrink: 0,
   },
   title: {
     fontSize: 15,
