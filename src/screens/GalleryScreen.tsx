@@ -1,8 +1,8 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Image } from 'expo-image';
-import AwesomeGallery, { type RenderItemInfo } from 'react-native-awesome-gallery';
+import PagerView from 'react-native-pager-view';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type Props = {
@@ -11,41 +11,12 @@ type Props = {
   onClose: () => void;
 };
 
-function renderItem({ item, setImageDimensions }: RenderItemInfo<string>) {
-  return (
-    <Image
-      source={{ uri: item }}
-      style={StyleSheet.absoluteFillObject}
-      contentFit="contain"
-      cachePolicy="memory-disk"
-      allowDownscaling
-      recyclingKey={item}
-      onLoad={(e) => {
-        const src = (e as any)?.source;
-        if (src?.width && src?.height) {
-          setImageDimensions({ width: src.width, height: src.height });
-        }
-      }}
-    />
-  );
-}
-
 export default function GalleryScreen({ images, initialIndex, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const [index, setIndex] = useState(initialIndex);
   const [headerVisible, setHeaderVisible] = useState(true);
 
-  const handleIndexChange = useCallback((i: number) => setIndex(i), []);
   const toggleHeader = useCallback(() => setHeaderVisible((v) => !v), []);
-
-  // Prefetch adjacent images so swipe is instant (no decode jank)
-  useEffect(() => {
-    const targets: string[] = [];
-    if (images[index - 1]) targets.push(images[index - 1]);
-    targets.push(images[index]);
-    if (images[index + 1]) targets.push(images[index + 1]);
-    targets.forEach((uri) => Image.prefetch(uri));
-  }, [images, index]);
 
   return (
     <Modal
@@ -57,19 +28,27 @@ export default function GalleryScreen({ images, initialIndex, onClose }: Props) 
     >
       <StatusBar style="light" />
       <View style={styles.root}>
-        <AwesomeGallery
-          data={images}
-          initialIndex={initialIndex}
-          keyExtractor={(item) => item}
-          renderItem={renderItem}
-          onIndexChange={handleIndexChange}
-          onSwipeToClose={onClose}
-          onTap={toggleHeader}
-          doubleTapScale={2.5}
-          doubleTapInterval={250}
-          maxScale={5}
-          numToRender={2}
-        />
+        <PagerView
+          style={styles.pager}
+          initialPage={initialIndex}
+          onPageSelected={(e) => setIndex(e.nativeEvent.position)}
+          scrollEnabled
+        >
+          {images.map((img, i) => (
+            <View key={i} style={styles.page}>
+              <TouchableOpacity activeOpacity={1} onPress={toggleHeader} style={StyleSheet.absoluteFillObject}>
+                <Image
+                  source={{ uri: img }}
+                  style={StyleSheet.absoluteFillObject}
+                  contentFit="contain"
+                  cachePolicy="memory-disk"
+                  allowDownscaling
+                  recyclingKey={img}
+                />
+              </TouchableOpacity>
+            </View>
+          ))}
+        </PagerView>
 
         {headerVisible && (
           <View style={[styles.header, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
@@ -88,6 +67,8 @@ export default function GalleryScreen({ images, initialIndex, onClose }: Props) 
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)' },
+  pager: { flex: 1 },
+  page: { flex: 1 },
   header: {
     position: 'absolute',
     top: 0, left: 0, right: 0,
