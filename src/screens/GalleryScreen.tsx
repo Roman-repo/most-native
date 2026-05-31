@@ -11,19 +11,16 @@ type Props = {
   onClose: () => void;
 };
 
-function renderItem({ item, setImageDimensions }: RenderItemInfo<string>) {
+function renderItem({ item }: RenderItemInfo<string>) {
   return (
     <Image
       source={{ uri: item }}
       style={StyleSheet.absoluteFillObject}
       contentFit="contain"
+      cachePolicy="memory-disk"
+      allowDownscaling
+      transition={500}
       recyclingKey={item}
-      onLoad={(e) => {
-        const src = (e as any)?.source;
-        if (src?.width && src?.height) {
-          setImageDimensions({ width: src.width, height: src.height });
-        }
-      }}
     />
   );
 }
@@ -57,7 +54,7 @@ export default function GalleryScreen({ images, initialIndex, onClose }: Props) 
           doubleTapScale={2.5}
           doubleTapInterval={250}
           maxScale={5}
-          numToRender={3}
+          numToRender={2}
         />
 
         {headerVisible && (
