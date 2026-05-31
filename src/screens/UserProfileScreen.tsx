@@ -13,6 +13,7 @@ import {
   IconBack, IconChat, IconPhone, IconVideoCamera,
 } from '../components/Icons';
 import AvatarView from '../components/AvatarView';
+import ProfileSkeleton from '../components/ProfileSkeleton';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -43,6 +44,7 @@ export default function UserProfileScreen({ username, chatId, onBack, onOpenGall
   const [messages, setMessages] = useState<Message[]>([]);
   const [presence, setPresence] = useState<PresenceState | null>(null);
   const [tab, setTab] = useState<TabKey>('media');
+  const [profileLoading, setProfileLoading] = useState(true);
 
   // Slide-in on mount
   useEffect(() => {
@@ -81,7 +83,8 @@ export default function UserProfileScreen({ username, chatId, onBack, onOpenGall
 
   // Subscriptions
   useEffect(() => {
-    const u1 = listenMessages(chatId, setMessages);
+    setProfileLoading(true);
+    const u1 = listenMessages(chatId, (msgs) => { setMessages(msgs); setProfileLoading(false); });
     const u2 = listenUserPresence(username, setPresence);
     return () => { u1(); u2(); };
   }, [chatId, username]);
@@ -250,70 +253,74 @@ export default function UserProfileScreen({ username, chatId, onBack, onOpenGall
             <View style={styles.headerBtn} />
           </View>
 
-          <ScrollView
-            style={{ flex: 1 }}
-            contentContainerStyle={{ flexGrow: 1 }}
-          >
-            {/* Top: avatar + name + status */}
-            <View style={styles.topBlock}>
-              <AvatarView user={username} size={120} fontSize={48} style={{ marginBottom: 14 }} />
-              <Text style={styles.name} numberOfLines={1}>{username}</Text>
-              <Text style={[styles.status, { color: statusColor }]}>{statusText}</Text>
-            </View>
-
-            {/* Action buttons */}
-            <View style={styles.actions}>
-              <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7} onPress={close}>
-                <IconChat size={22} color={theme.accent} />
-                <Text style={styles.actionLabel}>Чат</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7} onPress={handleAudioCall}>
-                <IconPhone size={22} color={theme.accent} />
-                <Text style={styles.actionLabel}>Звонок</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7} onPress={handleVideoCall}>
-                <IconVideoCamera size={22} color={theme.accent} />
-                <Text style={styles.actionLabel}>Видео</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Username row */}
-            <View style={styles.infoRow}>
-              <View style={styles.infoIconWrap}><Text style={styles.infoIcon}>👤</Text></View>
-              <View style={styles.infoBody}>
-                <Text style={styles.infoValue}>@{username}</Text>
-                <Text style={styles.infoLabel}>Имя пользователя</Text>
+          {profileLoading ? (
+            <ProfileSkeleton />
+          ) : (
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{ flexGrow: 1 }}
+            >
+              {/* Top: avatar + name + status */}
+              <View style={styles.topBlock}>
+                <AvatarView user={username} size={120} fontSize={48} style={{ marginBottom: 14 }} />
+                <Text style={styles.name} numberOfLines={1}>{username}</Text>
+                <Text style={[styles.status, { color: statusColor }]}>{statusText}</Text>
               </View>
-            </View>
 
-            {/* Tabs (sticky) */}
-            <View style={styles.tabsBar}>
-              {TABS.map((t) => {
-                const active = tab === t.key;
-                return (
-                  <TouchableOpacity
-                    key={t.key}
-                    style={[styles.tabBtn, active && styles.tabBtnActive]}
-                    activeOpacity={0.7}
-                    onPress={() => setTab(t.key)}
-                  >
-                    <Text
-                      style={[styles.tabText, active && styles.tabTextActive]}
-                      numberOfLines={1}
-                      allowFontScaling={false}
+              {/* Action buttons */}
+              <View style={styles.actions}>
+                <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7} onPress={close}>
+                  <IconChat size={22} color={theme.accent} />
+                  <Text style={styles.actionLabel}>Чат</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7} onPress={handleAudioCall}>
+                  <IconPhone size={22} color={theme.accent} />
+                  <Text style={styles.actionLabel}>Звонок</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7} onPress={handleVideoCall}>
+                  <IconVideoCamera size={22} color={theme.accent} />
+                  <Text style={styles.actionLabel}>Видео</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Username row */}
+              <View style={styles.infoRow}>
+                <View style={styles.infoIconWrap}><Text style={styles.infoIcon}>👤</Text></View>
+                <View style={styles.infoBody}>
+                  <Text style={styles.infoValue}>@{username}</Text>
+                  <Text style={styles.infoLabel}>Имя пользователя</Text>
+                </View>
+              </View>
+
+              {/* Tabs (sticky) */}
+              <View style={styles.tabsBar}>
+                {TABS.map((t) => {
+                  const active = tab === t.key;
+                  return (
+                    <TouchableOpacity
+                      key={t.key}
+                      style={[styles.tabBtn, active && styles.tabBtnActive]}
+                      activeOpacity={0.7}
+                      onPress={() => setTab(t.key)}
                     >
-                      {t.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+                      <Text
+                        style={[styles.tabText, active && styles.tabTextActive]}
+                        numberOfLines={1}
+                        allowFontScaling={false}
+                      >
+                        {t.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
 
-            {/* Tab content */}
-            <View style={styles.tabContent}>
-              {renderTabContent()}
-            </View>
-          </ScrollView>
+              {/* Tab content */}
+              <View style={styles.tabContent}>
+                {renderTabContent()}
+              </View>
+            </ScrollView>
+          )}
         </Animated.View>
       </PanGestureHandler>
     </Animated.View>

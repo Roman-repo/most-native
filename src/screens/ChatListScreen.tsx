@@ -14,6 +14,8 @@ import { listenUnread } from '../services/unread';
 import AvatarView from '../components/AvatarView';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { IconSearch, IconClose } from '../components/Icons';
+import ChatListSkeleton from '../components/ChatListSkeleton';
+import Skeleton from '../components/Skeleton';
 
 type Chat = {
   id: string;
@@ -385,8 +387,13 @@ export default function ChatListScreen({ user, onOpenChat, onOpenDrawer }: Props
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator color={theme.accent} size="large" />
+      <View style={styles.container}>
+        <View style={[styles.header, { paddingTop: 60 }]}>
+          <Skeleton width={36} height={36} borderRadius={18} />
+          <Skeleton width={100} height={20} borderRadius={10} />
+          <Skeleton width={36} height={36} borderRadius={18} />
+        </View>
+        <ChatListSkeleton count={10} />
       </View>
     );
   }

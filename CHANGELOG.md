@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## v4.19.0 (2026-05-25) — Skeleton loading
+
+**Фича:** Shimmer-скелетоны на всех экранах с загрузкой данных — замена ActivityIndicator на content placeholders с анимацией градиента.
+
+**Что сделано:**
+- **REQ-53 — Skeleton loading:**
+  - `src/components/Skeleton.tsx` — базовый компонент скелетона. `LinearGradient` из `expo-linear-gradient` + `Animated.Value` с loop-трансляцией по X создаёт shimmer-эффект (пульсирующий блик). Фон `rgba(255,255,255,0.06)`, блик `rgba(255,255,255,0.12)`. Поддерживает любые `width`, `height`, `borderRadius`.
+  - `src/components/ChatListSkeleton.tsx` — скелетон списка чатов: 8 placeholder items с аватаркой (48×48 круг), двумя строками (имя + время, превью + бейдж).
+  - `src/components/ChatSkeleton.tsx` — скелетон чата: 8 placeholder bubbles (чередование incoming/outgoing, одно изображение). Фон пузырей полупрозрачный — отличается по цвету для me/other.
+  - `src/components/ProfileSkeleton.tsx` — скелетон профиля: хедер, аватар 120×120, имя, статус, 3 action-кнопки, info row, табы, grid из 6 плейсхолдеров.
+- **Интеграция:**
+  - `src/screens/ChatListScreen.tsx` — `ActivityIndicator` заменён на `ChatListSkeleton` + header skeleton во время `loading`.
+  - `src/screens/ChatScreen.tsx` — добавлен `messagesLoading` state. Первый `listenMessages` callback устанавливает `messagesLoading=false`. Пока loading — рендерится `ChatSkeleton` вместо `ScrollView`.
+  - `src/screens/UserProfileScreen.tsx` — добавлен `profileLoading` state. Первый callback `listenMessages` / `listenUserPresence` снимает loading. Пока loading — рендерится `ProfileSkeleton` вместо `ScrollView`.
+- `package.json` + `app.json` — bump версии 4.19.0.
+
+**EAS dev-build:** не требуется пересборка.
+
+---
+
 ## v4.18.0 (2026-05-25) — Реакции и чтение далее
 
 **Фича:** Расширенный выбор эмодзи-реакций с категориями и поиском + «Читать далее» для длинных сообщений + анимации реакций.

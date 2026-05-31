@@ -16,6 +16,7 @@ import {
 } from 'expo-audio';
 import { theme } from '../styles/theme';
 import MessageBubble from '../components/MessageBubble';
+import ChatSkeleton from '../components/ChatSkeleton';
 import ThanosSnap from '../components/ThanosSnap';
 import AvatarView from '../components/AvatarView';
 import ReactionPicker from '../components/ReactionPicker';
@@ -138,6 +139,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
   const inbBottomPad = Platform.OS === 'android' ? 6 : Math.max(insets.bottom, 20);
   // — Chat state —
   const [messages, setMessages] = useState<Message[]>([]);
+  const [messagesLoading, setMessagesLoading] = useState(true);
   const [pins, setPins] = useState<PinInfo[]>([]);
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState<ReplyInfo | null>(null);
@@ -244,7 +246,11 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
 
   useEffect(() => {
     console.log('[Sub] listenMessages SUBSCRIBE chatId=', chatId, 'pageSize=', pageSize);
-    const unsubMsgs = listenMessages(chatId, setMessages, pageSize);
+    setMessagesLoading(true);
+    const unsubMsgs = listenMessages(chatId, (msgs) => {
+      setMessages(msgs);
+      setMessagesLoading(false);
+    }, pageSize);
     return () => {
       console.log('[Sub] listenMessages UNSUBSCRIBE chatId=', chatId, 'pageSize=', pageSize);
       unsubMsgs();
@@ -1119,23 +1125,29 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
 
         {/* Messages + reply bar (absolute поверх списка) */}
         <Animated.View style={[styles.listWrap, { opacity: listOpacity }]}>
-          <ScrollView
-            ref={scrollViewRef}
-            onScroll={handleListScroll}
-            scrollEventThrottle={32}
-            onContentSizeChange={handleContentSizeChange}
-            removeClippedSubviews={true}
-            overScrollMode="never"
-            showsVerticalScrollIndicator={false}
-            style={styles.list}
-            contentContainerStyle={{
-              paddingTop: 12 + headerH + pinH,
-              paddingBottom: 12 + inputH + (editMsg ? editH : 0) + (replyTo ? replyH : 0),
-              minHeight: 1,
-            }}
-          >
-            {chatElements.length === 0 ? <ChatEmpty /> : chatElements}
-          </ScrollView>
+          {messagesLoading ? (
+            <View style={[styles.list, { paddingTop: 12 + headerH + pinH }]}>
+              <ChatSkeleton />
+            </View>
+          ) : (
+            <ScrollView
+              ref={scrollViewRef}
+              onScroll={handleListScroll}
+              scrollEventThrottle={32}
+              onContentSizeChange={handleContentSizeChange}
+              removeClippedSubviews={true}
+              overScrollMode="never"
+              showsVerticalScrollIndicator={false}
+              style={styles.list}
+              contentContainerStyle={{
+                paddingTop: 12 + headerH + pinH,
+                paddingBottom: 12 + inputH + (editMsg ? editH : 0) + (replyTo ? replyH : 0),
+                minHeight: 1,
+              }}
+            >
+              {chatElements.length === 0 ? <ChatEmpty /> : chatElements}
+            </ScrollView>
+          )}
 
           {stickyDateLabel !== '' && (
             <View style={[styles.stickyDateWrap, { top: 12 + headerH + pinH }]}>

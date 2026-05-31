@@ -152,7 +152,7 @@
 
 ## REQ-52: Анимация переходов между экранами 🚧 (частично: slide-in для UserProfileScreen и ProfileEditScreen; нет: shared element transitions, fade между login/chatList/chat)
 
-## REQ-53: Skeleton loading ⬜
+## REQ-53: Skeleton loading ✅ — *v4.19.0* (`Skeleton` с shimmer-градиентом, `ChatListSkeleton`, `ChatSkeleton`, `ProfileSkeleton` — заменены ActivityIndicator на всех экранах)
 
 ## REQ-54: Расширение эффектов чата ⬜
 
@@ -178,9 +178,9 @@
 
 | Статус | Количество |
 |--------|-----------:|
-| ✅ Выполнено | **54** |
+| ✅ Выполнено | **55** |
 | 🚧 Частично / на приёмке | **5** |
-| ⬜ Не реализовано | **22** |
+| ⬜ Не реализовано | **21** |
 | ❌ Не актуально | **2** |
 | 🔁 В бэклоге | **0** (все 🔁 либо выполнены, либо перенесены в ⬜) |
 
