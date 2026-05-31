@@ -61,6 +61,24 @@ export function IconPhone({ size = 22, color = '#fff' }: IconProps) {
   );
 }
 
+export function IconCallOut({ size = 12, color = '#00b894' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Line x1="7" y1="17" x2="17" y2="7" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      <Polyline points="7 7 17 7 17 17" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+export function IconCallIn({ size = 12, color = '#00b894' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Line x1="17" y1="7" x2="7" y2="17" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      <Polyline points="17 17 7 17 7 7" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
 export function IconPin({ size = 16, color = '#fff' }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
