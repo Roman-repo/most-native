@@ -11,7 +11,7 @@ type Props = {
   onClose: () => void;
 };
 
-function renderItem({ item }: RenderItemInfo<string>) {
+function renderItem({ item, setImageDimensions }: RenderItemInfo<string>) {
   return (
     <Image
       source={{ uri: item }}
@@ -19,8 +19,13 @@ function renderItem({ item }: RenderItemInfo<string>) {
       contentFit="contain"
       cachePolicy="memory-disk"
       allowDownscaling
-      transition={500}
       recyclingKey={item}
+      onLoad={(e) => {
+        const src = (e as any)?.source;
+        if (src?.width && src?.height) {
+          setImageDimensions({ width: src.width, height: src.height });
+        }
+      }}
     />
   );
 }
