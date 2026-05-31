@@ -381,9 +381,21 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
     if (!pins.length) return;
     const idx = pinIndex % pins.length;
     setPinIndex((idx + 1) % pins.length);
-    const pos = msgPositionsRef.current.get(pins[idx].key);
-    if (pos && scrollViewRef.current) {
-      scrollViewRef.current.scrollTo({ y: Math.max(0, pos.y - headerH - pinH - 20), animated: true });
+    const targetKey = pins[idx].key;
+    const bubbleRef = bubbleRefsMap.current.get(targetKey);
+
+    if (bubbleRef && scrollViewRef.current) {
+      bubbleRef.measureInWindow((bx: number, by: number) => {
+        (scrollViewRef.current as any).measureInWindow((sx: number, sy: number) => {
+          const relativeY = by - sy;
+          scrollViewRef.current?.scrollTo({ y: Math.max(0, relativeY - headerH - pinH - 20), animated: true });
+        });
+      });
+    } else {
+      const pos = msgPositionsRef.current.get(targetKey);
+      if (pos && scrollViewRef.current) {
+        scrollViewRef.current.scrollTo({ y: Math.max(0, pos.y - headerH - pinH - 20), animated: true });
+      }
     }
   }, [pins, pinIndex, headerH, pinH]);
 
