@@ -1,7 +1,6 @@
 import { useRef, useState, useCallback, useEffect, memo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from 'react-native-reanimated';
+import { Swipeable } from 'react-native-gesture-handler';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { IconPlay, IconPause, IconFile, IconReply } from './Icons';
@@ -253,46 +252,26 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
     onLongPress(m);
   }, [m, onLongPress]);
 
-  const translateX = useSharedValue(0);
-
-  const pan = Gesture.Pan()
-    .activeOffsetX([-10, 10])
-    .failOffsetY([-20, 20])
-    .onUpdate((event) => {
-      'worklet';
-      if (event.translationX > 0) {
-        translateX.value = event.translationX;
-      }
-    })
-    .onEnd((event) => {
-      'worklet';
-      if (event.translationX > 60) {
-        runOnJS(onReply)(m);
-      }
-      translateX.value = withSpring(0);
-    });
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }],
-  }));
-
-  const replyIconStyle = useAnimatedStyle(() => ({
-    opacity: Math.min(1, translateX.value / 40),
-    transform: [{ scale: Math.min(1, translateX.value / 40) }],
-  }));
-
   return (
-    <GestureDetector gesture={pan}>
-      <Animated.View
-        ref={outerViewRef}
-        collapsable={false}
-        style={[styles.row, isMe ? styles.rowMe : styles.rowOther, m.image && styles.rowImage, deleting && { opacity: 0 }, animatedStyle]}
-        onLayout={handleLayout}
-      >
-        <Animated.View style={[styles.replyIconWrap, replyIconStyle]}>
+    <Swipeable
+      renderLeftActions={() => (
+        <View style={styles.replyAction}>
           <IconReply size={22} color={theme.accent} />
-        </Animated.View>
-        <TouchableOpacity activeOpacity={0.85} onPress={() => onLongPress(m)}>
+        </View>
+      )}
+      onSwipeableLeftOpen={() => onReply(m)}
+      leftThreshold={60}
+      rightThreshold={9999}
+      friction={1.5}
+      overshootLeft={false}
+    >
+    <View
+      ref={outerViewRef}
+      collapsable={false}
+      style={[styles.row, isMe ? styles.rowMe : styles.rowOther, m.image && styles.rowImage, deleting && { opacity: 0 }]}
+      onLayout={handleLayout}
+    >
+      <TouchableOpacity activeOpacity={0.85} onPress={() => onLongPress(m)}>
             {showSender && !isMe && (
               <Text style={[styles.senderName, { color: senderColor(m.sender) }]}>{m.sender}</Text>
             )}
@@ -418,8 +397,8 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
               );
             })()}
       </TouchableOpacity>
-      </Animated.View>
-    </GestureDetector>
+    </View>
+    </Swipeable>
   );
 }, (prev, next) =>
   prev.message._key === next.message._key &&
@@ -606,12 +585,8 @@ const styles = StyleSheet.create({
   contactPhone: { fontSize: 13, color: 'rgba(255,255,255,0.6)' },
 
   // Swipe-to-reply
-  replyIconWrap: {
-    position: 'absolute',
-    left: -40,
-    top: 0,
-    bottom: 0,
-    width: 36,
+  replyAction: {
+    width: 60,
     alignItems: 'center',
     justifyContent: 'center',
   },
