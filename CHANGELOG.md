@@ -30,6 +30,27 @@
 - `src/components/MessageBubble.tsx`:
   - **Кэширование `resolvedUri`** для AudioBubble и VideoBubble. Module-level `Map<msgKey, uri>` предотвращает повторную `base64ToTempFile` конвертацию.
 - `app.json` + `package.json` — bump версии 4.17.0.
+- **Inline-поиск чатов + глобальный поиск по сообщениям:**
+  - `src/screens/ChatListScreen.tsx` — поле поиска прямо в хедере (как в Telegram). При тапе на 🔍 заголовок "Мост" плавно скрывается, появляется `TextInput` с плейсхолдером "Поиск чатов". Фильтрация по названию чата, `lastText`, `otherUser` — мгновенно, клиент-side.
+  - Глобальный поиск по содержимому сообщений — `limitToLast(200)` per chat через Firebase RTDB, debounce 400ms, подсветка найденного слова. Результаты группируются секцией "Сообщения" под найденными чатами. Тап на результат — открывает чат.
+  - Аватарки чатов в результатах поиска сообщений — `AvatarView` для личных чатов, цветной круг с иконкой для групп.
+  - `SearchMessagesModal` больше не используется в `ChatListScreen` — весь поиск inline.
+- **Slash-команды:**
+  - `src/components/SlashCommandsMenu.tsx` — overlay-меню над полем ввода с позиционированием через `bottom: inputH + 8` (вынесено из `inwWrap` на уровень корневого `View`).
+  - `/слова` → `SlashWordsCard` — карточка триггерных слов.
+  - `/эффект` → `SlashEffectPicker` → `ChatEffects` — 9 эффектов (confetti, hearts, balloons, snow, cats, sakura, lightning, notes, coins).
+- **Реакции и эффекты:**
+  - `src/components/FlyingReaction.tsx` — эмодзи вылетает вверх при выборе в `ReactionPicker`.
+  - `src/components/ReadReceiptsModal.tsx` (REQ-43) — тап на ✓✓ в групповом чате показывает список прочитавших / непрочитавших.
+  - `src/components/DateSearchModal.tsx` (REQ-42) — поиск по дате DD.MM.YYYY, скролл к первому сообщению с ts ≥ даты.
+- **Драфты и индикаторы:**
+  - `AsyncStorage` `draft_{chatId}` — сохранение черновика на каждое изменение, восстановление при входе в чат, очистка при отправке. Красный бейдж "Черновик" в списке чатов (REQ-38).
+  - Зелёный italic "печатает..." в превью чата через `listenTyping` (REQ-39).
+- **Отправка файлов и контактов:**
+  - `DocumentPicker` → base64 → Firebase, лимит 5MB. File bubble — белый круг с иконкой + имя + размер.
+  - `expo-contacts` → inline picker → Firebase. Contact bubble — аватар с инициалом + имя + телефон.
+  - `AttachmentMenu` — меню вложений (фото, камера, файл, контакт) через `BottomSheetModal`.
+- `AGENTS.md` — git workflow, conventional commits, rollback policy, AI agent rules.
 
 **Критерий готовности:**
 - Скролл чата плавный, как в веб-версии — никаких рывков и подрагиваний
