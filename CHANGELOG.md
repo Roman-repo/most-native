@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## v4.17.1 (2026-05-25) — Свайп для ответа + Галерея
+
+**Фича:** Telegram-style свайп вправо для ответа на сообщение + полноэкранная галерея с плавной анимацией масштабирования при свайпе.
+
+**Что сделано:**
+- **Swipe-to-reply (REQ-10):**
+  - `src/components/MessageBubble.tsx` — `Swipeable` из `react-native-gesture-handler` v1. Свайп вправо >60px триггерит `onReply(m)`, reply bar открывается с цитатой. Иконка `IconReply` появляется слева. Auto-close через ref после вызова колбека. Короткий тап — контекстное меню (не конфликтует со свайпом).
+  - Первоначальная реализация через `GestureDetector` + `Gesture.Pan()` v2 вызывала scroll lag — `useSharedValue` / `useAnimatedStyle` на каждом пузыре блокировал нативный поток. Откат на `Swipeable` v1 устранил лаги.
+  - Haptic feedback: `Haptics.selectionAsync()` — минимальный кросс-платформенный отклик. Платформенные `Vibration.vibrate(5)` на Android оказались ниже порога восприятия.
+- **Telegram-style gallery:**
+  - `src/screens/GalleryScreen.tsx` — `AwesomeGallery` заменён на `FlatList` + `pagingEnabled` + Reanimated `useAnimatedScrollHandler`. `AwesomeGallery` вызывал JS-thread jank при base64 decode крупных изображений.
+  - Анимация масштабирования при свайпе: `interpolate` на `scrollX.value` — исходящее фото уменьшается до `0.88` + opacity `0.5`, входящее растёт от `0.88` до `1.0`. Выполняется полностью на UI thread, 60fps.
+  - Prefetch соседних изображений через `Image.prefetch(uri)` при смене индекса — устраняет decode-jank при быстром свайпе.
+- `package.json` + `app.json` — bump версии 4.17.1.
+
+**EAS dev-build:** не требуется пересборка.
+
+---
+
 ## v4.17.0 (2026-05-25) — Плавный скролл чата
 
 **Фича:** Миграция списка сообщений на `ScrollView` (полный рендер без виртуализации) + замена ручного keyboard-tracking на нативный `KeyboardAvoidingView` + устранение лагов от `BlurView`.
