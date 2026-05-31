@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback, useEffect, memo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, Vibration } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { VideoView, useVideoPlayer } from 'expo-video';
@@ -263,7 +263,11 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
         </View>
       )}
       onSwipeableWillOpen={() => {
-        Haptics.selectionAsync().catch(() => {});
+        if (Platform.OS === 'android') {
+          Vibration.vibrate(5);
+        } else {
+          Haptics.selectionAsync().catch(() => {});
+        }
       }}
       onSwipeableLeftOpen={() => {
         onReply(m);
