@@ -33,8 +33,7 @@ const StickerCell = memo(({ item, onPress }: { item: string; onPress: (s: string
 
 const AnimCell = memo(({ item, onPress }: { item: typeof ANIM_STICKERS[0]; onPress: (id: string) => void }) => (
   <TouchableOpacity style={styles.animCell} onPress={() => onPress(item.id)}>
-    <AnimStickerWebView svg={item.svg} width={60} height={60} />
-    <Text style={styles.animName}>{item.name}</Text>
+    <AnimStickerWebView svg={item.svg} width={100} height={100} />
   </TouchableOpacity>
 ));
 
@@ -59,7 +58,7 @@ export default function EmojiPanel({ onEmoji, onSticker, onAnimSticker }: Props)
       {/* Вкладки */}
       <View style={styles.tabs}>
         {(['emoji', 'sticker', 'anim'] as Tab[]).map((t) => (
-          <TouchableOpacity key={t} style={[styles.tab, tab === t && styles.tabActive]} onPress={() => setTab(t)}>
+          <TouchableOpacity key={t} style={[styles.tab, tab === t && styles.tabActive]} onPress={() => setTab(t)} activeOpacity={1}>
             <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
               {t === 'emoji' ? '😊 Эмодзи' : t === 'sticker' ? '🎨 Стикеры' : '✨ Живые'}
             </Text>
@@ -88,6 +87,7 @@ export default function EmojiPanel({ onEmoji, onSticker, onAnimSticker }: Props)
             initialNumToRender={24}
             maxToRenderPerBatch={24}
             windowSize={3}
+            showsVerticalScrollIndicator={false}
           />
         </View>
       )}
@@ -103,6 +103,7 @@ export default function EmojiPanel({ onEmoji, onSticker, onAnimSticker }: Props)
           renderItem={renderSticker}
           removeClippedSubviews
           initialNumToRender={18}
+          showsVerticalScrollIndicator={false}
         />
       )}
 
@@ -111,12 +112,13 @@ export default function EmojiPanel({ onEmoji, onSticker, onAnimSticker }: Props)
         <FlatList
           data={ANIM_STICKERS}
           keyExtractor={(s) => s.id}
-          numColumns={4}
+          numColumns={3}
           style={styles.grid}
           contentContainerStyle={styles.gridContent}
           renderItem={renderAnim}
           removeClippedSubviews
           initialNumToRender={12}
+          showsVerticalScrollIndicator={false}
         />
       )}
     </View>
@@ -144,8 +146,8 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   tabActive: { borderBottomColor: theme.accent },
-  tabText: { fontSize: 13, color: theme.text2, fontWeight: '500' },
-  tabTextActive: { color: theme.accent },
+  tabText: { fontSize: 15, color: theme.text2, fontWeight: '600' },
+  tabTextActive: { color: theme.accent, fontWeight: '700' },
 
   emojiWrap: { flex: 1 },
   catRow: { maxHeight: 44, flexGrow: 0 },
@@ -161,8 +163,7 @@ const styles = StyleSheet.create({
   emojiItem: { fontSize: 26 },
 
   stickerCell: { width: SW / 6, height: SW / 6, alignItems: 'center', justifyContent: 'center' },
-  stickerItem: { fontSize: 38 },
+  stickerItem: { fontSize: 48 },
 
-  animCell: { width: SW / 4, height: SW / 4, alignItems: 'center', justifyContent: 'center', gap: 2 },
-  animName: { fontSize: 10, color: theme.text2, textAlign: 'center' },
+  animCell: { width: SW / 3, height: SW / 3, alignItems: 'center', justifyContent: 'center' },
 });

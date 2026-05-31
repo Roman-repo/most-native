@@ -32,6 +32,8 @@ const AnimStickerWebView = memo(function AnimStickerWebView({ svg, width = 80, h
         scrollEnabled={false}
         bounces={false}
         overScrollMode="never"
+        showsVerticalScrollIndicator={false}
+        showsHorizontalScrollIndicator={false}
         androidLayerType="hardware"
         allowsInlineMediaPlayback
         mediaPlaybackRequiresUserAction={false}

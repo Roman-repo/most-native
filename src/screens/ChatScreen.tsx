@@ -22,18 +22,30 @@ import ReactionPicker from '../components/ReactionPicker';
 import ForwardModal, { type ForwardTarget } from '../components/ForwardModal';
 import PinBar from '../components/PinBar';
 import ThemePicker from '../components/ThemePicker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { IconBack, IconSmile, IconPaperclip, IconMic, IconSend, IconVideoNote, IconReplyBar, IconClose, IconCtxEdit, IconCheck, IconPhone } from '../components/Icons';
 import ChatMenu, { type ChatMenuAction } from '../components/ChatMenu';
+import AttachmentMenu, { type AttachmentAction } from '../components/AttachmentMenu';
+import DateSearchModal from '../components/DateSearchModal';
+import ReadReceiptsModal from '../components/ReadReceiptsModal';
+import FlyingReaction from '../components/FlyingReaction';
+import ChatEffects from '../components/ChatEffects';
+import SlashCommandsMenu from '../components/SlashCommandsMenu';
+import SlashWordsCard from '../components/SlashWordsCard';
+import SlashEffectPicker from '../components/SlashEffectPicker';
+import type { FxKey } from '../components/ChatEffects';
 import Toast from '../components/Toast';
 import { startCall } from '../services/CallManager';
 import VideoRecorder from '../components/VideoRecorder';
-import { sendVideoMsg, editMessage, deleteMessage, forwardMessage } from '../managers/ChatManager';
+import { sendVideoMsg, editMessage, deleteMessage, forwardMessage, sendFile, sendContact } from '../managers/ChatManager';
 import EmojiPanel from '../components/EmojiPanel';
+
 import { getChatTheme, setChatTheme, type ChatTheme } from '../utils/chatThemes';
-import { ANIM_STICKERS } from '../utils/emoji';
+import { STICKERS, ANIM_STICKER_EMOJI, EMOJI_TO_ANIM_STICKER } from '../utils/emoji';
 import * as ImagePicker from 'expo-image-picker';
+
 import { fileToBase64 } from '../managers/MediaManager';
 import * as FileSystem from 'expo-file-system/legacy';
 import { listenUserPresence, formatLastSeen, type PresenceState } from '../services/presence';
@@ -89,6 +101,36 @@ function ChatEmpty() {
 const emptyWrapStyle = { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, paddingTop: 60 };
 const emptyTextStyle = { color: theme.text3, fontSize: 15 };
 
+function formatDateLabel(ts: number): string {
+  if (!ts) return '';
+  const d = new Date(ts);
+  const now = new Date();
+  const stripTime = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const daysDiff = Math.floor((stripTime(now).getTime() - stripTime(d).getTime()) / (1000 * 60 * 60 * 24));
+
+  if (daysDiff === 0) return 'Сегодня';
+  if (daysDiff === 1) return 'Вчера';
+
+  const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+  if (d.getFullYear() === now.getFullYear()) {
+    return `${d.getDate()} ${months[d.getMonth()]}`;
+  }
+  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function DateHeader({ label, onLayout }: { label: string; onLayout?: (y: number) => void }) {
+  return (
+    <View style={dateHeaderStyle} onLayout={(e) => onLayout?.(e.nativeEvent.layout.y)}>
+      <View style={dateHeaderPill}>
+        <Text style={dateHeaderText}>{label}</Text>
+      </View>
+    </View>
+  );
+}
+const dateHeaderStyle: any = { alignItems: 'center', marginVertical: 8, backgroundColor: 'transparent' };
+const dateHeaderPill: any = { backgroundColor: 'rgba(0,0,0,0.35)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 };
+const dateHeaderText: any = { color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: '500' };
+
 
 
 export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, onOpenPrivate, onOpenProfile, onNavigateToChat, onOpenGallery }: Props) {
@@ -107,9 +149,19 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
   const [chatTheme, setChatThemeState] = useState<ChatTheme | null>(null);
   const [themePickerOpen, setThemePickerOpen] = useState(false);
   const [chatMenuOpen, setChatMenuOpen] = useState(false);
+  const [dateSearchOpen, setDateSearchOpen] = useState(false);
+  const [readersMsg, setReadersMsg] = useState<{ key: string; ts: number } | null>(null);
+  const [flyingReaction, setFlyingReaction] = useState<{ emoji: string; id: number } | null>(null);
+  const [slashMenuOpen, setSlashMenuOpen] = useState(false);
+  const [slashWordsOpen, setSlashWordsOpen] = useState(false);
+  const [slashEffectOpen, setSlashEffectOpen] = useState(false);
+  const [manualFx, setManualFx] = useState<FxKey | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
-  const [pendingSticker, setPendingSticker] = useState<string | null>(null);
-  const [pendingAnimSticker, setPendingAnimSticker] = useState<string | null>(null);
+  const [showScrollDown, setShowScrollDown] = useState(false);
+  const [stickyDateLabel, setStickyDateLabel] = useState('');
+  const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
+  const datePositionsRef = useRef<Map<string, number>>(new Map());
+
   // — Layout heights for absolute-positioned bars (so BlurView overlays the message list) —
   const [headerH, setHeaderH] = useState(0);
   const [pinH, setPinH] = useState(0);
@@ -118,7 +170,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
   const [inputH, setInputH] = useState(0);
   const [deletingKeys, setDeletingKeys] = useState<Set<string>>(new Set());
   const scrollViewRef = useRef<ScrollView>(null);
-  const msgPositionsRef = useRef<Map<string, number>>(new Map());
+  const msgPositionsRef = useRef<Map<string, { y: number; height: number }>>(new Map());
   const isNearBottomRef = useRef(true);
   const pinIndexRef = useRef(0);
   const listOpacity = useRef(new Animated.Value(0)).current;
@@ -134,6 +186,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
   const prevContentHeightRef = useRef(0);
   const lastBottomTsRef = useRef(0);
   const scrollLockUntilRef = useRef(0);
+  const justSentRef = useRef(false);
   // Map of msgKey → outer View ref of MessageBubble (for singleton ThanosSnap to capture)
   const bubbleRefsMap = useRef<Map<string, any>>(new Map());
   const [thanosTargetKey, setThanosTargetKey] = useState<string | null>(null);
@@ -220,6 +273,20 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
     listOpacity.setValue(0);
   }, [chatId]);
 
+  // Drafts (REQ-38)
+  useEffect(() => {
+    AsyncStorage.getItem('draft_' + chatId).then((d) => { if (d) setText(d); });
+  }, [chatId]);
+
+  const draftSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveDraft = useCallback((cid: string, value: string) => {
+    if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
+    draftSaveTimer.current = setTimeout(() => {
+      if (value.trim()) AsyncStorage.setItem('draft_' + cid, value);
+      else AsyncStorage.removeItem('draft_' + cid);
+    }, 500);
+  }, []);
+
   // Detect ChatScreen mount/unmount (different from chatId effect — this fires on actual mount)
   useEffect(() => {
     console.log('[Mount] ChatScreen MOUNTED');
@@ -246,6 +313,21 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
       setHasMore(false);
     }
   }, [messages.length, pageSize]);
+
+  // Auto-scroll when user sends from middle of chat (fallback if onContentSizeChange misses it)
+  // NOTE: use last message _key instead of length because limitToLast(pageSize)
+  // replaces oldest msg when limit reached, so length stays constant.
+  const lastMsgKeyRef = useRef<string | null>(null);
+  const lastKey = messages[messages.length - 1]?._key;
+  useEffect(() => {
+    if (lastKey && lastKey !== lastMsgKeyRef.current && justSentRef.current) {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+        justSentRef.current = false;
+      }, 50);
+    }
+    lastMsgKeyRef.current = lastKey ?? null;
+  }, [lastKey]);
 
 
   const openEmoji = useCallback(() => {
@@ -285,9 +367,9 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
     if (!pins.length) return;
     const idx = pinIndexRef.current % pins.length;
     pinIndexRef.current = idx + 1;
-    const y = msgPositionsRef.current.get(pins[idx].key);
-    if (y !== undefined && scrollViewRef.current) {
-      scrollViewRef.current.scrollTo({ y: Math.max(0, y - headerH - pinH - 20), animated: true });
+    const pos = msgPositionsRef.current.get(pins[idx].key);
+    if (pos && scrollViewRef.current) {
+      scrollViewRef.current.scrollTo({ y: Math.max(0, pos.y - headerH - pinH - 20), animated: true });
     }
   }, [pins, headerH, pinH]);
 
@@ -420,32 +502,82 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
 
   // — Send text —
   const handleSend = useCallback(async () => {
-    if (pendingAnimSticker) {
-      const aid = pendingAnimSticker;
-      setPendingAnimSticker(null);
-      setPendingSticker(null);
-      await sendAnimSticker(chatId, user, aid);
-      return;
-    }
+    justSentRef.current = true;
     const t = text.trim();
-    if (pendingSticker && t === pendingSticker) {
-      setPendingSticker(null);
-      setText('');
-      await sendSticker(chatId, user, t);
+    if (!t) {
+      justSentRef.current = false;
       return;
     }
-    if (!t) return;
-    setText('');
-    stopTyping(chatId, user);
-    const reply = replyTo;
-    setReplyTo(null);
-    await sendMessage(chatId, user, t, reply ?? undefined);
-  }, [text, chatId, user, replyTo, pendingSticker, pendingAnimSticker]);
+    // Slash commands — не отправлять в Firebase
+    if (t.charAt(0) === '/') {
+      const cmd = t.toLowerCase();
+      if (cmd === '/слова' || cmd === '/слова ') {
+        setText('');
+        setSlashMenuOpen(false);
+        setSlashWordsOpen(true);
+        justSentRef.current = false;
+        return;
+      }
+      if (cmd === '/эффект' || cmd === '/эффект ') {
+        setText('');
+        setSlashMenuOpen(false);
+        setSlashEffectOpen(true);
+        justSentRef.current = false;
+        return;
+      }
+    }
+    try {
+      setText('');
+      AsyncStorage.removeItem('draft_' + chatId);
+      stopTyping(chatId, user);
+      setSlashMenuOpen(false);
+      const reply = replyTo;
+      setReplyTo(null);
+
+      // Parse text: separate anim stickers (by emoji), regular stickers, and plain text
+      const chars = Array.from(t);
+      let plain = '';
+      let first = true;
+      for (const ch of chars) {
+        if (ch === '\uFE0F') continue; // skip variation selector
+        const animId = EMOJI_TO_ANIM_STICKER[ch];
+        if (animId) {
+          if (plain.trim()) {
+            await sendMessage(chatId, user, plain.trim(), first ? (reply ?? undefined) : undefined);
+            plain = '';
+            first = false;
+          }
+          await sendAnimSticker(chatId, user, animId);
+          first = false;
+        } else if (STICKERS.includes(ch)) {
+          if (plain.trim()) {
+            await sendMessage(chatId, user, plain.trim(), first ? (reply ?? undefined) : undefined);
+            plain = '';
+            first = false;
+          }
+          await sendSticker(chatId, user, ch);
+          first = false;
+        } else {
+          plain += ch;
+        }
+      }
+      if (plain.trim()) {
+        await sendMessage(chatId, user, plain.trim(), first ? (reply ?? undefined) : undefined);
+      }
+    } finally {
+      setTimeout(() => { justSentRef.current = false; }, 2000);
+    }
+  }, [text, chatId, user, replyTo]);
+
+  // — Scroll to bottom —
+  const handleScrollToBottom = useCallback(() => {
+    scrollViewRef.current?.scrollToEnd({ animated: true });
+    markRead(chatId, user);
+    setShowScrollDown(false);
+  }, [chatId, user]);
 
   // — Pick image —
   const handlePickImage = useCallback(async () => {
-    setPendingSticker(null);
-    setPendingAnimSticker(null);
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
     if (result.canceled || !result.assets[0]) return;
     try {
@@ -459,19 +591,146 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
     }
   }, [chatId, user]);
 
+  const handleCamera = useCallback(async () => {
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.8 });
+    if (result.canceled || !result.assets[0]) return;
+    try {
+      const dataUrl = await fileToBase64(result.assets[0].uri, 'image/jpeg');
+      const { push, ref, serverTimestamp, update } = await import('firebase/database');
+      const { db } = await import('../services/firebase');
+      await push(ref(db, 'messages/' + chatId), { sender: user, image: dataUrl, ts: serverTimestamp() });
+      await update(ref(db, 'chats/' + chatId), { lastText: '📷 Фото', lastTs: serverTimestamp() });
+    } catch (e) {
+      console.error('[handleCamera]', e);
+    }
+  }, [chatId, user]);
+
+  const handlePickFile = useCallback(async () => {
+    try {
+      const DocumentPicker = await import('expo-document-picker');
+      const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
+      if (result.canceled || !result.assets[0]) return;
+      const asset = result.assets[0];
+      if (asset.size && asset.size > 5 * 1024 * 1024) {
+        Alert.alert('Файл слишком большой', 'Максимальный размер — 5 МБ');
+        return;
+      }
+      const base64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: 'base64' });
+      const mime = asset.mimeType || 'application/octet-stream';
+      const dataUrl = `data:${mime};base64,${base64}`;
+      const size = asset.size || 0;
+      let sizeStr = '';
+      if (size < 1024) sizeStr = size + ' Б';
+      else if (size < 1048576) sizeStr = Math.round(size / 1024) + ' КБ';
+      else sizeStr = Math.round(size / 1048576) + ' МБ';
+      await sendFile(chatId, user, dataUrl, asset.name, sizeStr);
+    } catch (e: any) {
+      if (e?.message?.includes('Cannot find native module') || e?.message?.includes('Native module')) {
+        Alert.alert('Требуется обновление', 'Отправка файлов появится после следующей сборки приложения');
+      } else {
+        console.error('[handlePickFile]', e);
+        Alert.alert('Ошибка', 'Не удалось отправить файл');
+      }
+    }
+  }, [chatId, user]);
+
+  const [contactPickerOpen, setContactPickerOpen] = useState(false);
+  const [contactsList, setContactsList] = useState<any[]>([]);
+
+  const handlePickContact = useCallback(async () => {
+    try {
+      const Contacts = await import('expo-contacts');
+      const { status } = await Contacts.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Нет доступа', 'Разрешите доступ к контактам в настройках');
+        return;
+      }
+      const { data } = await Contacts.getContactsAsync({
+        fields: [Contacts.Fields.PhoneNumbers],
+      });
+      const withPhone = data
+        .filter((c: any) => c.phoneNumbers && c.phoneNumbers.length > 0)
+        .sort((a: any, b: any) => (a.name || '').localeCompare(b.name || ''))
+        .slice(0, 60);
+      setContactsList(withPhone);
+      setContactPickerOpen(true);
+    } catch (e: any) {
+      if (e?.message?.includes('Cannot find native module') || e?.message?.includes('Native module')) {
+        Alert.alert('Требуется обновление', 'Отправка контактов появится после следующей сборки приложения');
+      } else {
+        console.error('[handlePickContact]', e);
+        Alert.alert('Ошибка', 'Не удалось получить контакты');
+      }
+    }
+  }, []);
+
+  const handleAttachmentAction = useCallback((action: AttachmentAction) => {
+    setAttachmentMenuOpen(false);
+    if (action === 'gallery') {
+      handlePickImage();
+    } else if (action === 'camera') {
+      handleCamera();
+    } else if (action === 'file') {
+      handlePickFile();
+    } else if (action === 'contact') {
+      handlePickContact();
+    }
+  }, [handlePickImage, handleCamera, handlePickFile, handlePickContact]);
+
+  const handleSlashPick = useCallback((cmd: string) => {
+    setText('');
+    setSlashMenuOpen(false);
+    if (cmd === '/слова') {
+      setSlashWordsOpen(true);
+    } else if (cmd === '/эффект') {
+      setSlashEffectOpen(true);
+    }
+  }, []);
+
+  const handleEffectPick = useCallback((key: FxKey) => {
+    setManualFx(key);
+  }, []);
+
+  const handleShowReaders = useCallback((msgKey: string, ts: number) => {
+    setReadersMsg({ key: msgKey, ts });
+  }, []);
+
+  const handleDateSearch = useCallback((dateStr: string) => {
+    const parts = dateStr.split('.');
+    if (parts.length !== 3) return;
+    const [d, m, y] = parts.map(Number);
+    const targetTs = new Date(y, m - 1, d).getTime();
+    let foundKey: string | null = null;
+    for (const msg of messages) {
+      if (typeof msg.ts === 'number' && msg.ts >= targetTs) {
+        foundKey = msg._key;
+        break;
+      }
+    }
+    if (!foundKey) {
+      Alert.alert('Не найдено', 'Сообщений за эту дату нет');
+      return;
+    }
+    const pos = msgPositionsRef.current.get(foundKey);
+    if (pos) {
+      scrollViewRef.current?.scrollTo({ y: pos.y, animated: true });
+    } else {
+      Alert.alert('Не найдено', 'Сообщение ещё не загружено');
+    }
+  }, [messages]);
+
   const handleLongPress = useCallback((msg: Message) => {
     setSelectedMsg(msg); setPickerVisible(true);
   }, []);
 
   const handleReply = useCallback((msg: Message) => {
-    setPendingSticker(null);
-    setPendingAnimSticker(null);
     setReplyTo({ sender: msg.sender, text: msg.text || '' });
   }, []);
 
   const handleReact = useCallback(async (emoji: string) => {
     if (!selectedMsg) return;
     await toggleReaction(chatId, selectedMsg._key, user, emoji);
+    setFlyingReaction({ emoji, id: Date.now() });
   }, [selectedMsg, chatId, user]);
 
   const handleReactionPress = useCallback(async (msgKey: string, emoji: string) => {
@@ -546,8 +805,6 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
     const msg = editMsg;
     setEditMsg(null);
     setText('');
-    setPendingSticker(null);
-    setPendingAnimSticker(null);
     await editMessage(chatId, msg._key, t);
   }, [editMsg, text, chatId]);
 
@@ -555,8 +812,6 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
     setText(prevTextRef.current);
     prevTextRef.current = '';
     setEditMsg(null);
-    setPendingSticker(null);
-    setPendingAnimSticker(null);
   }, []);
 
   const handleForwardPick = useCallback(async (target: ForwardTarget) => {
@@ -614,13 +869,18 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
     return () => { stopTyping(chatId, user); };
   }, [chatId, user]);
 
+  useEffect(() => {
+    datePositionsRef.current.clear();
+    msgPositionsRef.current.clear();
+  }, [messages]);
+
   const handleChangeText = useCallback((t: string) => {
     setText(t);
-    if (pendingAnimSticker) setPendingAnimSticker(null);
-    if (pendingSticker && t !== pendingSticker) setPendingSticker(null);
+    saveDraft(chatId, t);
+    setSlashMenuOpen(t.startsWith('/'));
     if (t.length > 0) setTyping(chatId, user);
     else stopTyping(chatId, user);
-  }, [chatId, user, pendingSticker, pendingAnimSticker]);
+  }, [chatId, user, saveDraft]);
 
   // showSender вычисляем отдельно, не встраивая в объекты сообщений
   const showSenderMap = useMemo(() => {
@@ -639,6 +899,47 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
     if (idx >= 0) onOpenGallery(images, idx);
   }, [messages, onOpenGallery]);
 
+  // Group messages by date for sticky date headers
+  const chatElements = useMemo(() => {
+    const elems: React.ReactNode[] = [];
+    let lastDate = '';
+    messages.forEach((item, index) => {
+      const dateLabel = formatDateLabel(item.ts);
+      if (dateLabel && dateLabel !== lastDate) {
+        elems.push(
+          <DateHeader
+            key={`date-${item._key}`}
+            label={dateLabel}
+            onLayout={(y) => datePositionsRef.current.set(dateLabel, y)}
+          />
+        );
+        lastDate = dateLabel;
+      }
+      elems.push(
+        <View key={item._key}>
+          <MessageBubble
+            message={item}
+            isMe={item.sender === user}
+            isRead={item.sender === user && typeof item.ts === 'number' && item.ts > 0 && item.ts <= maxOtherReadTs}
+            showSender={showSenderMap.get(item._key) ?? false}
+            onLongPress={handleLongPress}
+            onReactionPress={handleReactionPress}
+            onReply={handleReply}
+            onImagePress={handleImagePress}
+            bubbleColor={chatTheme?.acc}
+            peer={!isGroup && !isGeneralChat ? chatName : undefined}
+            registerBubbleRef={registerBubbleRef}
+            onLayoutBubble={(key, y, height) => msgPositionsRef.current.set(key, { y, height })}
+            isGroup={isGroup}
+            onShowReaders={handleShowReaders}
+          />
+          {index < messages.length - 1 && <MessageSeparator />}
+        </View>
+      );
+    });
+    return elems;
+  }, [messages, user, showSenderMap, handleLongPress, handleReactionPress, handleReply, handleImagePress, chatTheme, maxOtherReadTs, isGroup, isGeneralChat, chatName, registerBubbleRef]);
+
   const renderItem = useCallback(({ item }: { item: Message; index: number }) => {
     const isFreshlyArrived = newlyAddedKeysRef.current.has(item._key)
       && typeof item.ts === 'number' && (Date.now() - item.ts) < 5000;
@@ -655,6 +956,9 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
         bubbleColor={chatTheme?.acc}
         peer={!isGroup && !isGeneralChat ? chatName : undefined}
         registerBubbleRef={registerBubbleRef}
+        onLayoutBubble={(key, y, height) => msgPositionsRef.current.set(key, { y, height })}
+        isGroup={isGroup}
+        onShowReaders={handleShowReaders}
       />
     );
     if (isFreshlyArrived) {
@@ -668,14 +972,32 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
   const handleListScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
     const distFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
-    isNearBottomRef.current = distFromBottom < 80;
+    const nearBottom = distFromBottom < 80;
+    isNearBottomRef.current = nearBottom;
+    setShowScrollDown(prev => {
+      if (nearBottom && prev) return false;
+      if (!nearBottom && !prev) return true;
+      return prev;
+    });
+    // Sticky date label: find the date header just above current scroll position
+    const paddingTop = 12 + headerH + pinH;
+    const scrollY = contentOffset.y;
+    let currentLabel = '';
+    let maxY = -Infinity;
+    datePositionsRef.current.forEach((y, label) => {
+      if (y <= scrollY + paddingTop && y > maxY) {
+        maxY = y;
+        currentLabel = label;
+      }
+    });
+    setStickyDateLabel(currentLabel);
     // Pagination: chronological list, near top = oldest. Trigger to load older.
     if (contentOffset.y < 200 && hasMore && !paginationCooldownRef.current && messages.length >= pageSize) {
       paginationCooldownRef.current = true;
       console.log('[Pagination] BUMP pageSize from', pageSize, 'to', pageSize + 50);
       setPageSize(prev => prev + 50);
     }
-  }, [hasMore, messages.length, pageSize]);
+  }, [hasMore, messages.length, pageSize, headerH, pinH]);
 
   const handleContentSizeChange = useCallback((_w: number, h: number) => {
     if (!scrollViewRef.current) return;
@@ -700,10 +1022,11 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
       return;
     }
     if (locked) return;
-    // Auto-scroll only when a new message actually arrived AT THE BOTTOM (lastTs increased).
-    // Older messages pulled into the window from above, deletes, edits — do NOT trigger auto-scroll.
-    if (isNewBottomMsg && isNearBottomRef.current) {
-      console.log('[List] scrollToEnd (newBottom, nearBottom)');
+    // Auto-scroll when user just sent (content grew) OR when near bottom and new message arrived
+    if (justSentRef.current && h > prev) {
+      justSentRef.current = false;
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    } else if (isNewBottomMsg && isNearBottomRef.current) {
       scrollViewRef.current?.scrollToEnd({ animated: true });
     }
   }, [listOpacity, messages, pageSize]);
@@ -774,6 +1097,9 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
               <IconPhone size={20} color={theme.text} />
             </TouchableOpacity>
           )}
+          <TouchableOpacity style={styles.headerBtn} activeOpacity={0.6} onPress={() => setDateSearchOpen(true)}>
+            <Text style={styles.menuDots}>📅</Text>
+          </TouchableOpacity>
           {!isGeneralChat && (
             <TouchableOpacity style={styles.headerBtn} activeOpacity={0.6} onPress={() => setChatMenuOpen(true)}>
               <Text style={styles.menuDots}>⋮</Text>
@@ -800,6 +1126,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
             onContentSizeChange={handleContentSizeChange}
             removeClippedSubviews={true}
             overScrollMode="never"
+            showsVerticalScrollIndicator={false}
             style={styles.list}
             contentContainerStyle={{
               paddingTop: 12 + headerH + pinH,
@@ -807,25 +1134,26 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
               minHeight: 1,
             }}
           >
-            {messages.length === 0 ? <ChatEmpty /> : messages.map((item, index) => (
-              <View key={item._key}>
-                <MessageBubble
-                  message={item}
-                  isMe={item.sender === user}
-                  isRead={item.sender === user && typeof item.ts === 'number' && item.ts > 0 && item.ts <= maxOtherReadTs}
-                  showSender={showSenderMap.get(item._key) ?? false}
-                  onLongPress={handleLongPress}
-                  onReactionPress={handleReactionPress}
-                  onReply={handleReply}
-                  onImagePress={handleImagePress}
-                  bubbleColor={chatTheme?.acc}
-                  peer={!isGroup && !isGeneralChat ? chatName : undefined}
-                  registerBubbleRef={registerBubbleRef}
-                />
-                {index < messages.length - 1 && <MessageSeparator />}
-              </View>
-            ))}
+            {chatElements.length === 0 ? <ChatEmpty /> : chatElements}
           </ScrollView>
+
+          {stickyDateLabel !== '' && (
+            <View style={[styles.stickyDateWrap, { top: 12 + headerH + pinH }]}>
+              <View style={styles.stickyDatePill}>
+                <Text style={styles.stickyDateText}>{stickyDateLabel}</Text>
+              </View>
+            </View>
+          )}
+
+          {showScrollDown && (
+            <TouchableOpacity
+              style={styles.scrollDownBtn}
+              onPress={handleScrollToBottom}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.scrollDownArrow}>v</Text>
+            </TouchableOpacity>
+          )}
         </Animated.View>
 
         {editMsg && (
@@ -844,28 +1172,9 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
           </View>
         )}
 
-        {pendingAnimSticker && (
-          <View
-            style={[styles.animBar, styles.barAbs, { bottom: inputH + (editMsg ? editH : 0) + (replyTo ? replyH : 0), backgroundColor: theme.bg2 }]}
-          >
-            <View style={styles.animBarIcon}>
-              <Text style={{ fontSize: 18 }}>✨</Text>
-            </View>
-            <View style={styles.animBarContent}>
-              <Text style={styles.animBarLabel}>Живой стикер</Text>
-              <Text style={styles.animBarName} numberOfLines={1}>
-                {ANIM_STICKERS.find(s => s.id === pendingAnimSticker)?.name || ''}
-              </Text>
-            </View>
-            <TouchableOpacity onPress={() => setPendingAnimSticker(null)} style={styles.animBarClose}>
-              <IconClose size={16} color={theme.text2} />
-            </TouchableOpacity>
-          </View>
-        )}
-
         {replyTo && (
           <View
-            style={[styles.replyBar, styles.barAbs, { bottom: inputH + (editMsg ? editH : 0) + (pendingAnimSticker ? 48 : 0), backgroundColor: theme.bg2 }]}
+            style={[styles.replyBar, styles.barAbs, { bottom: inputH + (editMsg ? editH : 0), backgroundColor: theme.bg2 }]}
             onLayout={(e) => setReplyH(e.nativeEvent.layout.height)}
           >
             <View style={styles.replyBarIcon}>
@@ -901,7 +1210,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
                 multiline
                 onSubmitEditing={handleSend}
               />
-              <TouchableOpacity style={styles.ini} activeOpacity={0.6} onPress={handlePickImage} disabled={recording}>
+              <TouchableOpacity style={styles.ini} activeOpacity={0.6} onPress={() => setAttachmentMenuOpen(true)} disabled={recording}>
                 <IconPaperclip size={22} color='rgba(255,255,255,0.6)' />
               </TouchableOpacity>
             </View>
@@ -994,6 +1303,54 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
           onClose={() => setThemePickerOpen(false)}
         />
 
+        <DateSearchModal
+          visible={dateSearchOpen}
+          onClose={() => setDateSearchOpen(false)}
+          onSearch={handleDateSearch}
+        />
+
+        <ReadReceiptsModal
+          visible={!!readersMsg}
+          chatId={chatId}
+          msgTs={readersMsg?.ts || 0}
+          meUser={user}
+          members={messages.length > 0 ? Array.from(new Set(messages.map(m => m.sender))) : []}
+          onClose={() => setReadersMsg(null)}
+        />
+
+        {/* Contact picker overlay */}
+        {contactPickerOpen && (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 100, justifyContent: 'flex-end' }]}>
+            <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setContactPickerOpen(false)} />
+            <View style={{ backgroundColor: theme.bg2, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '70%', paddingBottom: 20 }}>
+              <View style={{ padding: 16, alignItems: 'center', borderBottomWidth: 1, borderBottomColor: theme.border }}>
+                <Text style={{ color: theme.text, fontSize: 16, fontWeight: '600' }}>Выберите контакт</Text>
+              </View>
+              <ScrollView>
+                {contactsList.map((c) => (
+                  <TouchableOpacity
+                    key={(c as any).id || c.name + (c.phoneNumbers?.[0]?.number || '')}
+                    style={{ flexDirection: 'row', alignItems: 'center', padding: 14, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: theme.border }}
+                    onPress={() => {
+                      const phone = c.phoneNumbers?.[0]?.number || '';
+                      sendContact(chatId, user, c.name || 'Без имени', phone);
+                      setContactPickerOpen(false);
+                    }}
+                  >
+                    <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(102,126,234,0.3)', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                      <Text style={{ color: theme.text, fontSize: 16, fontWeight: '600' }}>{(c.name || '?').charAt(0).toUpperCase()}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: theme.text, fontSize: 15 }} numberOfLines={1}>{c.name || 'Без имени'}</Text>
+                      <Text style={{ color: theme.text2, fontSize: 13 }}>{c.phoneNumbers?.[0]?.number || ''}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+        )}
+
         <ChatMenu
           visible={chatMenuOpen}
           canVideoCall={!isGeneralChat && !isGroup}
@@ -1002,12 +1359,41 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
           onClose={() => setChatMenuOpen(false)}
         />
 
+        <AttachmentMenu
+          visible={attachmentMenuOpen}
+          onPick={handleAttachmentAction}
+          onClose={() => setAttachmentMenuOpen(false)}
+        />
+
         <Toast
           message={toastMsg || ''}
           visible={!!toastMsg}
           onHide={() => setToastMsg(null)}
         />
 
+
+        {/* Chat effects (REQ-46) */}
+        <ChatEffects messages={messages} manualEffect={manualFx} onManualDone={() => setManualFx(null)} />
+
+        {/* Flying reaction animation */}
+        {flyingReaction && (
+          <FlyingReaction
+            key={flyingReaction.id}
+            emoji={flyingReaction.emoji}
+            onComplete={() => setFlyingReaction(null)}
+          />
+        )}
+
+        {/* Slash commands overlay */}
+        {slashMenuOpen && (
+          <View style={[styles.slashOverlay, { bottom: inputH + 8 }]}>
+            <SlashCommandsMenu filter={text} onPick={handleSlashPick} />
+          </View>
+        )}
+
+        <SlashWordsCard visible={slashWordsOpen} onClose={() => setSlashWordsOpen(false)} />
+
+        <SlashEffectPicker visible={slashEffectOpen} onClose={() => setSlashEffectOpen(false)} onPick={handleEffectPick} />
 
         {/* Video recording overlay */}
         {videoRecording && (
@@ -1044,8 +1430,11 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
       >
         <EmojiPanel
           onEmoji={(e) => setText(t => t + e)}
-          onSticker={(s) => { setPendingSticker(s); setText(s); closeEmoji(); }}
-          onAnimSticker={(id) => { setPendingAnimSticker(id); closeEmoji(); }}
+          onSticker={(s) => setText(t => t + s)}
+          onAnimSticker={(id) => {
+            const emoji = ANIM_STICKER_EMOJI[id];
+            if (emoji) setText(t => t + emoji);
+          }}
         />
       </Animated.View>
     </GestureHandlerRootView>
@@ -1065,6 +1454,7 @@ const styles = StyleSheet.create({
   headerAbs: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 },
   pinBarAbs: { position: 'absolute', left: 0, right: 0, zIndex: 9 },
   barAbs: { position: 'absolute', left: 0, right: 0, zIndex: 9 },
+  slashOverlay: { position: 'absolute', left: 8, right: 8, zIndex: 60 },
   menuDots: { fontSize: 22, color: theme.text, lineHeight: 26 },
   pinBarWrap: { overflow: 'hidden' },
   headerBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
@@ -1082,6 +1472,44 @@ const styles = StyleSheet.create({
   list: { flex: 1 },
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60 },
   emptyText: { color: theme.text3, fontSize: 15 },
+  scrollDownBtn: {
+    position: 'absolute',
+    right: 14,
+    bottom: 14,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 5,
+  },
+  scrollDownArrow: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  stickyDateWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 6,
+    paddingTop: 4,
+  },
+  stickyDatePill: {
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  stickyDateText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 13,
+    fontWeight: '500',
+  },
 
   editBar: {
     flexDirection: 'row', alignItems: 'center',
@@ -1108,20 +1536,6 @@ const styles = StyleSheet.create({
   replyBarAuthor: { fontSize: 13, color: theme.accent, fontWeight: '700', marginBottom: 1 },
   replyBarText: { fontSize: 13, color: theme.text2 },
   replyBarClose: { padding: 4, flexShrink: 0 },
-
-  /* animBar — pending animated sticker */
-  animBar: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 12, paddingVertical: 8,
-    borderTopWidth: 1, borderTopColor: theme.border,
-    gap: 8,
-    overflow: 'hidden',
-  },
-  animBarIcon: { flexShrink: 0, alignItems: 'center', justifyContent: 'center', width: 28, height: 28 },
-  animBarContent: { flex: 1, minWidth: 0 },
-  animBarLabel: { fontSize: 13, color: theme.accent, fontWeight: '700', marginBottom: 1 },
-  animBarName: { fontSize: 13, color: theme.text2 },
-  animBarClose: { padding: 4, flexShrink: 0 },
 
   /* inb — always-rendered input bar container */
   inb: {

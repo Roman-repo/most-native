@@ -87,22 +87,24 @@ export default function UserProfileScreen({ username, chatId, onBack, onOpenGall
   }, [chatId, username]);
 
   // Aggregations for tabs
-  const { media, links, audio } = useMemo(() => {
+  const { media, links, audio, files } = useMemo(() => {
     const m: Message[] = [];
     const l: LinkEntry[] = [];
     const a: Message[] = [];
+    const f: Message[] = [];
     const re = /https?:\/\/[^\s]+/g;
     for (const msg of messages) {
       if (msg.image) m.push(msg);
       if (msg.audio) a.push(msg);
+      if (msg.file) f.push(msg);
       if (msg.text) {
         const found = msg.text.match(re);
         if (found) for (const u of found) l.push({ url: u, sender: msg.sender, ts: msg.ts as number });
       }
     }
     // newest first
-    m.reverse(); a.reverse(); l.reverse();
-    return { media: m, links: l, audio: a };
+    m.reverse(); a.reverse(); l.reverse(); f.reverse();
+    return { media: m, links: l, audio: a, files: f };
   }, [messages]);
 
   // Swipe-right to close
@@ -164,7 +166,20 @@ export default function UserProfileScreen({ username, chatId, onBack, onOpenGall
       );
     }
     if (tab === 'files') {
-      return <Text style={styles.empty}>Нет файлов</Text>;
+      if (!files.length) return <Text style={styles.empty}>Нет файлов</Text>;
+      return (
+        <View style={styles.listContent}>
+          {files.map((item) => (
+            <View key={item._key} style={styles.listRow}>
+              <View style={styles.listIconCircle}><Text style={styles.listIconEmoji}>📄</Text></View>
+              <View style={styles.listBody}>
+                <Text style={styles.listTitle} numberOfLines={1}>{item.fileName || 'Файл'}</Text>
+                <Text style={styles.listSubtitle}>{item.fileSize || ''}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      );
     }
     if (tab === 'links') {
       if (!links.length) return <Text style={styles.empty}>Нет ссылок</Text>;

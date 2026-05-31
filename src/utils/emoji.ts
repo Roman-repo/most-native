@@ -18,6 +18,51 @@ export const ALL_EMOJIS: string[] = (Object.values(EMOJIS) as string[][]).flat()
 // Стикеры — большие эмодзи
 export const STICKERS = ['😀','😎','🥳','😍','🤔','😱','😭','🤣','💪','🔥','❤️','👍','👎','🎉','💯','⭐','🙏','🫶','👀','💀','🦊','🐱','🐶','🌈','☀️','🌙','⚡','🍕','☕','🎮','🚀','💎'];
 
+// Сопоставление живых стикеров с emoji для TextInput
+export const ANIM_STICKER_EMOJI: Record<string, string> = {
+  'heart-pulse': '💓',
+  'thumbs-up': '👍',
+  'fire': '🔥',
+  'star-spin': '🌟',
+  'cat-wave': '🐱',
+  'laugh': '😂',
+  'cry': '😢',
+  'rocket': '🚀',
+  'clap': '👏',
+  'zzz': '😴',
+  'party': '🎉',
+  'rainbow': '🌈',
+  'ghost': '👻',
+  'diamond': '💎',
+  'sun': '☀️',
+  'lightning': '⚡',
+  'music': '🎵',
+  'gift': '🎁',
+  'balloon': '🎈',
+  'snowflake': '❄️',
+  'ufo': '🛸',
+  'love-eyes': '😍',
+  'coffee': '☕',
+  'bird': '🐦',
+  'flower': '🌸',
+  'envelope': '✉️',
+  'clock': '🕐',
+  'camera': '📷',
+  'rain': '🌧️',
+  'umbrella': '☂️',
+  'book': '📖',
+};
+
+export const EMOJI_TO_ANIM_STICKER: Record<string, string> = {};
+for (const [id, emoji] of Object.entries(ANIM_STICKER_EMOJI)) {
+  EMOJI_TO_ANIM_STICKER[emoji] = id;
+  // Без variation selector (U+FE0F) — для парсинга после Array.from()
+  const withoutVS = emoji.replace(/\uFE0F/g, '');
+  if (withoutVS !== emoji) {
+    EMOJI_TO_ANIM_STICKER[withoutVS] = id;
+  }
+}
+
 // Живые SVG-стикеры
 export const ANIM_STICKERS = [
   {id:'heart-pulse',name:'Сердце',svg:'<svg viewBox="0 0 80 80"><path d="M40 70S10 50 10 30a15 15 0 0 1 30 0 15 15 0 0 1 30 0C70 50 40 70 40 70z" fill="#E85D75"><animate attributeName="d" dur="0.6s" repeatCount="indefinite" values="M40 70S10 50 10 30a15 15 0 0 1 30 0 15 15 0 0 1 30 0C70 50 40 70 40 70z;M40 68S14 48 14 30a13 13 0 0 1 26 0 13 13 0 0 1 26 0C66 48 40 68 40 68z;M40 70S10 50 10 30a15 15 0 0 1 30 0 15 15 0 0 1 30 0C70 50 40 70 40 70z"/></path></svg>'},
@@ -41,4 +86,14 @@ export const ANIM_STICKERS = [
   {id:'balloon',name:'Шарик',svg:'<svg viewBox="0 0 80 80"><g><animateTransform attributeName="transform" type="translate" values="0,0;-2,-4;2,-2;0,0" dur="2s" repeatCount="indefinite"/><ellipse cx="40" cy="32" rx="14" ry="18" fill="#FF7675"/><path d="M40 50l-2 4h4z" fill="#FF7675"/><path d="M40 54q-4 8 2 16" stroke="#636e72" stroke-width="1.5" fill="none"/></g></svg>'},
   {id:'snowflake',name:'Снежинка',svg:'<svg viewBox="0 0 80 80"><g transform-origin="40 40"><animateTransform attributeName="transform" type="rotate" from="0 40 40" to="360 40 40" dur="6s" repeatCount="indefinite"/><line x1="40" y1="10" x2="40" y2="70" stroke="#74B9FF" stroke-width="3" stroke-linecap="round"/><line x1="14" y1="25" x2="66" y2="55" stroke="#74B9FF" stroke-width="3" stroke-linecap="round"/><line x1="14" y1="55" x2="66" y2="25" stroke="#74B9FF" stroke-width="3" stroke-linecap="round"/></g></svg>'},
   {id:'ufo',name:'НЛО',svg:'<svg viewBox="0 0 80 80"><g><animateTransform attributeName="transform" type="translate" values="0,0;0,-4;0,0" dur="1.5s" repeatCount="indefinite"/><ellipse cx="40" cy="40" rx="26" ry="8" fill="#636e72"/><ellipse cx="40" cy="38" rx="16" ry="12" fill="#A29BFE"/><circle cx="22" cy="42" r="2.5" fill="#FDCB6E"><animate attributeName="opacity" values="1;.3;1" dur="0.6s" repeatCount="indefinite"/></circle><circle cx="40" cy="44" r="2.5" fill="#FDCB6E"><animate attributeName="opacity" values="1;.3;1" dur="0.6s" repeatCount="indefinite" begin="0.2s"/></circle><circle cx="58" cy="42" r="2.5" fill="#FDCB6E"><animate attributeName="opacity" values="1;.3;1" dur="0.6s" repeatCount="indefinite" begin="0.4s"/></circle></g></svg>'},
+  {id:'love-eyes',name:'Любовь',svg:'<svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="28" fill="#FDCB6E"/><path d="M26 34a6 6 0 0 1 12 0" stroke="#E85D75" stroke-width="3" fill="none"><animate attributeName="d" values="M26 34a6 6 0 0 1 12 0;M26 30a6 6 0 0 1 12 0;M26 34a6 6 0 0 1 12 0" dur="0.6s" repeatCount="indefinite"/></path><path d="M42 34a6 6 0 0 1 12 0" stroke="#E85D75" stroke-width="3" fill="none"><animate attributeName="d" values="M42 34a6 6 0 0 1 12 0;M42 30a6 6 0 0 1 12 0;M42 34a6 6 0 0 1 12 0" dur="0.6s" repeatCount="indefinite"/></path><path d="M32 52q8 6 16 0" stroke="#2d3436" stroke-width="2.5" fill="none"/></svg>'},
+  {id:'coffee',name:'Кофе',svg:'<svg viewBox="0 0 80 80"><path d="M20 32h24v28a8 8 0 0 1-8 8h-8a8 8 0 0 1-8-8z" fill="#6C5CE7"/><path d="M44 38h6a6 6 0 0 1 0 12h-6" stroke="#6C5CE7" stroke-width="3" fill="none"/><path d="M28 22c0 0 4-10 8-6s-4 10-4 10" stroke="#dfe6e9" stroke-width="2.5" fill="none"><animate attributeName="d" values="M28 22c0 0 4-10 8-6s-4 10-4 10;M28 16c0 0 4-12 8-8s-4 12-4 12;M28 22c0 0 4-10 8-6s-4 10-4 10" dur="1.5s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.7;0.2;0.7" dur="1.5s" repeatCount="indefinite"/></path></svg>'},
+  {id:'bird',name:'Птица',svg:'<svg viewBox="0 0 80 80"><g><animateTransform attributeName="transform" type="translate" values="0,0;0,-4;0,0" dur="0.7s" repeatCount="indefinite"/><ellipse cx="40" cy="42" rx="16" ry="12" fill="#74B9FF"/><circle cx="48" cy="40" r="2.5" fill="#2d3436"/><path d="M56 40l10-4-6 8z" fill="#FDCB6E"/><path d="M24 42l-10-8 6 12z" fill="#74B9FF"><animateTransform attributeName="transform" type="rotate" values="0 24 42;-25 24 42;0 24 42" dur="0.25s" repeatCount="indefinite"/></path><path d="M56 42l10 8-6-12z" fill="#74B9FF"><animateTransform attributeName="transform" type="rotate" values="0 56 42;25 56 42;0 56 42" dur="0.25s" repeatCount="indefinite"/></path></g></svg>'},
+  {id:'flower',name:'Цветок',svg:'<svg viewBox="0 0 80 80"><g transform-origin="40 38"><animateTransform attributeName="transform" type="scale" values="1;1.12;1" dur="2s" repeatCount="indefinite"/><ellipse cx="40" cy="30" rx="10" ry="18" fill="#E85D75"/><ellipse cx="40" cy="30" rx="18" ry="10" fill="#E85D75" transform="rotate(45 40 30)"/><ellipse cx="40" cy="30" rx="18" ry="10" fill="#E85D75" transform="rotate(-45 40 30)"/><circle cx="40" cy="30" r="6" fill="#FDCB6E"/></g><path d="M40 48v22" stroke="#00B894" stroke-width="3.5" stroke-linecap="round"/></svg>'},
+  {id:'envelope',name:'Письмо',svg:'<svg viewBox="0 0 80 80"><rect x="14" y="24" width="52" height="36" rx="5" fill="#74B9FF"/><path d="M14 28l26 18 26-18" stroke="#fff" stroke-width="2.5" fill="none"/><circle cx="40" cy="44" r="4" fill="#FDCB6E"><animate attributeName="cy" values="44;36;44" dur="1.2s" repeatCount="indefinite"/></circle></svg>'},
+  {id:'clock',name:'Часы',svg:'<svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="26" fill="none" stroke="#2d3436" stroke-width="3.5"/><line x1="40" y1="40" x2="40" y2="20" stroke="#2d3436" stroke-width="3" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" from="0 40 40" to="360 40 40" dur="2s" repeatCount="indefinite"/></line><line x1="40" y1="40" x2="54" y2="40" stroke="#E85D75" stroke-width="2.5" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" from="0 40 40" to="360 40 40" dur="24s" repeatCount="indefinite"/></line></svg>'},
+  {id:'camera',name:'Камера',svg:'<svg viewBox="0 0 80 80"><rect x="16" y="26" width="48" height="32" rx="7" fill="#636e72"/><circle cx="40" cy="42" r="11" fill="#2d3436"/><circle cx="40" cy="42" r="7" fill="#74B9FF"><animate attributeName="opacity" values="1;0.3;1" dur="0.8s" repeatCount="indefinite"/></circle><circle cx="56" cy="32" r="3.5" fill="#FDCB6E"><animate attributeName="r" values="3.5;5.5;3.5" dur="0.4s" repeatCount="indefinite"/><animate attributeName="opacity" values="1;0.5;1" dur="0.4s" repeatCount="indefinite"/></circle></svg>'},
+  {id:'rain',name:'Дождь',svg:'<svg viewBox="0 0 80 80"><path d="M18 32a22 22 0 0 1 44 0z" fill="#636e72"/><line x1="26" y1="46" x2="22" y2="62" stroke="#74B9FF" stroke-width="2.5" stroke-linecap="round"><animate attributeName="y1" values="46;50;46" dur="0.6s" repeatCount="indefinite"/><animate attributeName="y2" values="62;66;62" dur="0.6s" repeatCount="indefinite"/></line><line x1="40" y1="46" x2="36" y2="62" stroke="#74B9FF" stroke-width="2.5" stroke-linecap="round"><animate attributeName="y1" values="46;50;46" dur="0.6s" repeatCount="indefinite" begin="0.2s"/><animate attributeName="y2" values="62;66;62" dur="0.6s" repeatCount="indefinite" begin="0.2s"/></line><line x1="54" y1="46" x2="50" y2="62" stroke="#74B9FF" stroke-width="2.5" stroke-linecap="round"><animate attributeName="y1" values="46;50;46" dur="0.6s" repeatCount="indefinite" begin="0.4s"/><animate attributeName="y2" values="62;66;62" dur="0.6s" repeatCount="indefinite" begin="0.4s"/></line></svg>'},
+  {id:'umbrella',name:'Зонт',svg:'<svg viewBox="0 0 80 80"><g><animateTransform attributeName="transform" type="rotate" values="-6 40 64;6 40 64;-6 40 64" dur="1s" repeatCount="indefinite"/><path d="M14 42a26 26 0 0 1 52 0z" fill="#E85D75"/><path d="M40 42v28" stroke="#2d3436" stroke-width="3" stroke-linecap="round"/><path d="M34 70h12" stroke="#2d3436" stroke-width="3" stroke-linecap="round"/></g></svg>'},
+  {id:'book',name:'Книга',svg:'<svg viewBox="0 0 80 80"><rect x="20" y="16" width="40" height="50" rx="5" fill="#6C5CE7"/><path d="M40 16v50" stroke="#A29BFE" stroke-width="2.5"/><rect x="28" y="28" width="20" height="3" rx="1.5" fill="#A29BFE"><animate attributeName="width" values="20;8;20" dur="2.5s" repeatCount="indefinite"/></rect><rect x="28" y="38" width="14" height="3" rx="1.5" fill="#A29BFE"/><rect x="28" y="48" width="10" height="3" rx="1.5" fill="#A29BFE"/></svg>'},
 ];

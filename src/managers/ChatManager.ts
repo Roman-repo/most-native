@@ -12,6 +12,11 @@ export type Message = {
   vidDur?: string;
   sticker?: string;
   animSticker?: string;
+  file?: string;
+  fileName?: string;
+  fileSize?: string;
+  contactName?: string;
+  contactPhone?: string;
   ts: number;
   replyTo?: { sender: string; text: string };
   reactions?: Record<string, { user: string; emoji: string }>;
@@ -94,6 +99,27 @@ export async function sendVideoMsg(
   const vidDur = `${Math.floor(d / 60)}:${String(d % 60).padStart(2, '0')}`;
   await push(ref(db, 'messages/' + chatId), { sender, vidMsg, vidDur, ts: serverTimestamp() });
   await update(ref(db, 'chats/' + chatId), { lastText: '🎥 Видео', lastTs: serverTimestamp() });
+}
+
+export async function sendFile(
+  chatId: string,
+  sender: string,
+  file: string,
+  fileName: string,
+  fileSize: string,
+): Promise<void> {
+  await push(ref(db, 'messages/' + chatId), { sender, file, fileName, fileSize, ts: serverTimestamp() });
+  await update(ref(db, 'chats/' + chatId), { lastText: '📄 Файл', lastTs: serverTimestamp() });
+}
+
+export async function sendContact(
+  chatId: string,
+  sender: string,
+  contactName: string,
+  contactPhone: string,
+): Promise<void> {
+  await push(ref(db, 'messages/' + chatId), { sender, contactName, contactPhone, ts: serverTimestamp() });
+  await update(ref(db, 'chats/' + chatId), { lastText: '👤 ' + contactName, lastTs: serverTimestamp() });
 }
 
 export async function sendSticker(
@@ -195,6 +221,8 @@ export async function forwardMessage(
   else if (original.vidMsg) { payload.vidMsg = original.vidMsg; payload.vidDur = original.vidDur; preview = '🎥 Видео'; }
   else if (original.sticker) { payload.sticker = original.sticker; preview = original.sticker; }
   else if (original.animSticker) { payload.animSticker = original.animSticker; preview = '✨ Стикер'; }
+  else if (original.file) { payload.file = original.file; payload.fileName = original.fileName; payload.fileSize = original.fileSize; preview = '📄 Файл'; }
+  else if (original.contactName) { payload.contactName = original.contactName; payload.contactPhone = original.contactPhone; preview = '👤 ' + original.contactName; }
   await push(ref(db, 'messages/' + chatId), payload);
   await update(ref(db, 'chats/' + chatId), { lastText: preview, lastTs: serverTimestamp() });
 }

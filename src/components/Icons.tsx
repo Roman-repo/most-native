@@ -179,6 +179,43 @@ export function IconCtxPrivate({ size = 20, color = '#fff' }: IconProps) {
   );
 }
 
+export function IconGallery({ size = 28, color = '#fff' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x="3" y="3" width="18" height="18" rx="2" stroke={color} strokeWidth={s} strokeLinecap="round" strokeLinejoin="round" />
+      <Circle cx="8.5" cy="8.5" r="1.5" stroke={color} strokeWidth={s} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M21 15l-5-5L5 21" stroke={color} strokeWidth={s} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+export function IconCamera({ size = 28, color = '#fff' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" stroke={color} strokeWidth={s} strokeLinecap="round" strokeLinejoin="round" />
+      <Circle cx="12" cy="13" r="4" stroke={color} strokeWidth={s} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+export function IconFile({ size = 28, color = '#fff' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke={color} strokeWidth={s} strokeLinecap="round" strokeLinejoin="round" />
+      <Polyline points="14 2 14 8 20 8" stroke={color} strokeWidth={s} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+export function IconContact({ size = 28, color = '#fff' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke={color} strokeWidth={s} strokeLinecap="round" strokeLinejoin="round" />
+      <Circle cx="12" cy="7" r="4" stroke={color} strokeWidth={s} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
 // Reply bar icons — SVG из web-source/modules/template.html #rpb
 
 export function IconReplyBar({ size = 18, color = '#fff' }: IconProps) {
@@ -290,6 +327,15 @@ export function IconBellOff({ size = 18, color = '#fff' }: IconProps) {
       <Polygon points="11 5 6 9 2 9 2 15 6 15 11 19" stroke={color} strokeWidth={s} strokeLinecap="round" strokeLinejoin="round" />
       <Line x1="23" y1="9" x2="17" y2="15" stroke={color} strokeWidth={s} strokeLinecap="round" />
       <Line x1="17" y1="9" x2="23" y2="15" stroke={color} strokeWidth={s} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+export function IconSearch({ size = 20, color = '#fff' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx="11" cy="11" r="8" stroke={color} strokeWidth={s} strokeLinecap="round" strokeLinejoin="round" />
+      <Line x1="21" y1="21" x2="16.65" y2="16.65" stroke={color} strokeWidth={s} strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   );
 }

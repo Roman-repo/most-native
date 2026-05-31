@@ -19,6 +19,7 @@ import DrawerContent from './src/screens/DrawerContent';
 import GalleryScreen from './src/screens/GalleryScreen';
 import { init as initCallManager } from './src/services/CallManager';
 import { setMeForRingtones } from './src/services/ringtones';
+import { initPushNotifications } from './src/services/push';
 import { theme } from './src/styles/theme';
 
 type Screen = 'login' | 'chatList' | 'chat';
@@ -60,6 +61,12 @@ export default function App() {
     if (!user) return;
     initCallManager(user);
     setMeForRingtones(user);
+  }, [user]);
+
+  // Push notifications: init при логине
+  useEffect(() => {
+    if (!user) return;
+    initPushNotifications(user, handleOpenChat);
   }, [user]);
 
   function openDrawer() {

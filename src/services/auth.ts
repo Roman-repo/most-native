@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from './firebase';
 import { ref, get, set } from 'firebase/database';
 import CryptoJS from 'crypto-js';
+import { cleanupPushNotifications } from './push';
 
 const SALT = '_pulse_2026';
 
@@ -41,6 +42,10 @@ export async function getSession(): Promise<{ user: string; hash: string } | nul
 }
 
 export async function logout(): Promise<void> {
+  const user = await AsyncStorage.getItem('pc_user');
+  if (user) {
+    await cleanupPushNotifications(user);
+  }
   await AsyncStorage.removeItem('pc_user');
   await AsyncStorage.removeItem('pc_hash');
 }

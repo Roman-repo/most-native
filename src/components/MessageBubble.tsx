@@ -2,7 +2,7 @@ import { useRef, useState, useCallback, useEffect, memo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { VideoView, useVideoPlayer } from 'expo-video';
-import { IconPlay, IconPause } from './Icons';
+import { IconPlay, IconPause, IconFile } from './Icons';
 import CallBubble from './CallBubble';
 import { base64ToTempFile } from '../managers/MediaManager';
 import * as Haptics from 'expo-haptics';
@@ -25,12 +25,24 @@ type Props = {
   deleting?: boolean;
   /** Called with bubble's outer View ref while mounted; null on unmount. */
   registerBubbleRef?: (key: string, ref: any) => void;
+  onLayoutBubble?: (key: string, y: number, height: number) => void;
+  onShowReaders?: (msgKey: string, ts: number) => void;
+  isGroup?: boolean;
+  onDoubleTap?: (msg: Message) => void; // kept for API compat, no longer used
 };
 
 const READ_COLOR = '#55EFC4';
 
-function CheckMark({ read }: { read: boolean }) {
-  return <Text style={[styles.check, read ? styles.checkRead : styles.checkSent]}>{read ? ' ✓✓' : ' ✓'}</Text>;
+function CheckMark({ read, onPress }: { read: boolean; onPress?: () => void }) {
+  const mark = <Text style={[styles.check, read ? styles.checkRead : styles.checkSent]}>{read ? ' ✓✓' : ' ✓'}</Text>;
+  if (onPress) {
+    return (
+      <TouchableOpacity onPress={onPress} activeOpacity={0.6} hitSlop={6}>
+        {mark}
+      </TouchableOpacity>
+    );
+  }
+  return mark;
 }
 
 const SENDER_COLORS = ['#E85D75','#6C5CE7','#00B894','#FDCB6E','#E17055','#0984E3','#A29BFE','#55EFC4'];
@@ -202,7 +214,7 @@ function VideoBubble({ url, duration, msgKey }: { url: string; duration: string;
   );
 }
 
-const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, showSender, onLongPress, onReactionPress, onReply, onImagePress, bubbleColor, peer, deleting, registerBubbleRef }: Props) {
+const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, showSender, onLongPress, onReactionPress, onReply, onImagePress, bubbleColor, peer, deleting, registerBubbleRef, onLayoutBubble, onShowReaders, isGroup }: Props) {
   const outerViewRef = useRef<any>(null);
 
   // Register outer View ref with parent so singleton ThanosSnap can capture it
@@ -211,6 +223,12 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
     if (outerViewRef.current) registerBubbleRef(m._key, outerViewRef.current);
     return () => { registerBubbleRef(m._key, null); };
   }, [m._key, registerBubbleRef]);
+
+  const handleLayout = useCallback((e: any) => {
+    if (!onLayoutBubble) return;
+    const { y, height } = e.nativeEvent.layout;
+    onLayoutBubble(m._key, y, height);
+  }, [m._key, onLayoutBubble]);
 
   if (m.system && (m.callDir || m.missed)) {
     return <CallBubble message={m} peer={peer || m.sender} />;
@@ -224,6 +242,10 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
   }
   const reactionEntries = Object.entries(reactionMap);
 
+  const readersPress = isMe && isGroup && onShowReaders ? () => onShowReaders(m._key, m.ts) : undefined;
+
+  const fileExt = m.fileName ? m.fileName.split('.').pop()?.toUpperCase() : '';
+
   const handleLongPressBubble = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft).catch(() => {});
     onLongPress(m);
@@ -233,9 +255,10 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
     <View
       ref={outerViewRef}
       collapsable={false}
-      style={[styles.row, isMe ? styles.rowMe : styles.rowOther, deleting && { opacity: 0 }]}
+      style={[styles.row, isMe ? styles.rowMe : styles.rowOther, m.image && styles.rowImage, deleting && { opacity: 0 }]}
+      onLayout={handleLayout}
     >
-      <TouchableOpacity activeOpacity={0.85} onLongPress={handleLongPressBubble}>
+      <TouchableOpacity activeOpacity={0.85} onPress={() => onLongPress(m)}>
             {showSender && !isMe && (
               <Text style={[styles.senderName, { color: senderColor(m.sender) }]}>{m.sender}</Text>
             )}
@@ -248,13 +271,15 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
             })()}
 
             {m.image && (
-              <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther, styles.imageBubble, isMe && bubbleColor ? { backgroundColor: bubbleColor } : undefined]}>
-                <TouchableOpacity activeOpacity={0.85} onPress={() => onImagePress && m.image && onImagePress(m.image)}>
-                  <Image source={{ uri: m.image }} style={styles.msgImage} resizeMode="cover" />
+              <View style={[styles.imageWrap, isMe ? styles.imageWrapMe : styles.imageWrapOther]}>
+                <TouchableOpacity activeOpacity={0.85} onPress={() => onImagePress && m.image && onImagePress(m.image)} onLongPress={() => onLongPress(m)}>
+                  <View style={{ borderRadius: 14, overflow: 'hidden' }}>
+                    <Image source={{ uri: m.image }} style={styles.msgImage} resizeMode="cover" />
+                  </View>
                 </TouchableOpacity>
-                <View style={styles.meta}>
-                  <Text style={[styles.time, isMe ? styles.timeMe : styles.timeOther]}>{formatTime(m.ts)}</Text>
-                  {isMe && <CheckMark read={isRead} />}
+                <View style={[styles.meta, styles.metaImage]}>
+                  <Text style={[styles.time, styles.timeImage]}>{formatTime(m.ts)}</Text>
+                  {isMe && <CheckMark read={isRead} onPress={readersPress} />}
                 </View>
               </View>
             )}
@@ -263,7 +288,7 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
                 <AudioBubble url={m.audio} duration={m.audioDur || '0:00'} msgKey={m._key} />
                 <View style={styles.meta}>
                   <Text style={[styles.time, isMe ? styles.timeMe : styles.timeOther]}>{formatTime(m.ts)}</Text>
-                  {isMe && <CheckMark read={isRead} />}
+                  {isMe && <CheckMark read={isRead} onPress={readersPress} />}
                 </View>
               </View>
             )}
@@ -272,11 +297,45 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
                 <VideoBubble url={m.vidMsg} duration={m.vidDur || ''} msgKey={m._key} />
                 <View style={[styles.meta, { marginTop: 4 }]}>
                   <Text style={[styles.time, isMe ? styles.timeMe : styles.timeOther]}>{formatTime(m.ts)}</Text>
-                  {isMe && <CheckMark read={isRead} />}
+                  {isMe && <CheckMark read={isRead} onPress={readersPress} />}
                 </View>
               </View>
             )}
-            {!m.sticker && !m.animSticker && !m.image && !m.audio && !m.vidMsg && (() => {
+            {m.file && (
+              <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther, isMe && bubbleColor ? { backgroundColor: bubbleColor, shadowColor: bubbleColor } : undefined]}>
+                <View style={styles.fileRow}>
+                  <View style={styles.fileIconWrap}>
+                    <IconFile size={24} color="#fff" />
+                  </View>
+                  <View style={styles.fileInfo}>
+                    <Text style={styles.fileName} numberOfLines={1}>{m.fileName || 'Файл'}</Text>
+                    <Text style={styles.fileSize}>{m.fileSize || ''}{m.fileSize && fileExt ? ', ' : ''}{fileExt}</Text>
+                  </View>
+                </View>
+                <View style={styles.meta}>
+                  <Text style={[styles.time, isMe ? styles.timeMe : styles.timeOther]}>{formatTime(m.ts)}</Text>
+                  {isMe && <CheckMark read={isRead} onPress={readersPress} />}
+                </View>
+              </View>
+            )}
+            {m.contactName && (
+              <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther, isMe && bubbleColor ? { backgroundColor: bubbleColor, shadowColor: bubbleColor } : undefined]}>
+                <View style={styles.contactRow}>
+                  <View style={styles.contactAvatar}>
+                    <Text style={styles.contactAvatarText}>{m.contactName.charAt(0).toUpperCase()}</Text>
+                  </View>
+                  <View style={styles.contactInfo}>
+                    <Text style={styles.contactName} numberOfLines={1}>{m.contactName}</Text>
+                    <Text style={styles.contactPhone}>{m.contactPhone || ''}</Text>
+                  </View>
+                </View>
+                <View style={styles.meta}>
+                  <Text style={[styles.time, isMe ? styles.timeMe : styles.timeOther]}>{formatTime(m.ts)}</Text>
+                  {isMe && <CheckMark read={isRead} onPress={readersPress} />}
+                </View>
+              </View>
+            )}
+            {!m.sticker && !m.animSticker && !m.image && !m.audio && !m.vidMsg && !m.file && !m.contactName && (() => {
               const timeStr = formatTime(m.ts);
               return (
                 <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther, isMe && bubbleColor ? { backgroundColor: bubbleColor, shadowColor: bubbleColor } : undefined]}>
@@ -311,14 +370,14 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
                         <View style={styles.metaTime}>
                           {m.edited && <Text style={styles.edited}>изм. </Text>}
                           <Text style={[styles.time, isMe ? styles.timeMe : styles.timeOther]}>{timeStr}</Text>
-                          {isMe && <CheckMark read={isRead} />}
+                          {isMe && <CheckMark read={isRead} onPress={readersPress} />}
                         </View>
                       </View>
                     ) : (
                       <View style={styles.timeInline} pointerEvents="none">
                         {m.edited && <Text style={styles.edited}>изм. </Text>}
                         <Text style={[styles.time, isMe ? styles.timeMe : styles.timeOther]}>{timeStr}</Text>
-                        {isMe && <CheckMark read={isRead} />}
+                        {isMe && <CheckMark read={isRead} onPress={readersPress} />}
                       </View>
                     )}
                   </View>
@@ -346,13 +405,21 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
   prev.message.callDir === next.message.callDir &&
   prev.message.callDur === next.message.callDur &&
   prev.message.missed === next.message.missed &&
-  prev.deleting === next.deleting
+  prev.message.file === next.message.file &&
+  prev.message.fileName === next.message.fileName &&
+  prev.message.fileSize === next.message.fileSize &&
+  prev.message.contactName === next.message.contactName &&
+  prev.message.contactPhone === next.message.contactPhone &&
+  prev.deleting === next.deleting &&
+  prev.isGroup === next.isGroup &&
+  prev.onShowReaders === next.onShowReaders
 );
 
 export default MessageBubble;
 
 const styles = StyleSheet.create({
   row: { paddingHorizontal: 16, paddingVertical: 1.5, maxWidth: '85%' },
+  rowImage: { paddingHorizontal: 4, maxWidth: '92%' },
   rowMe: { alignSelf: 'flex-end' },
   rowOther: { alignSelf: 'flex-start' },
 
@@ -407,6 +474,8 @@ const styles = StyleSheet.create({
   text: { fontSize: 16, lineHeight: 20.8, color: '#ffffff' },
 
   meta: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', marginTop: 3, gap: 2 },
+  metaImage: { position: 'absolute', right: 8, bottom: 6, marginTop: 0 },
+  timeImage: { color: 'rgba(255,255,255,0.9)', textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
   timeInline: { position: 'absolute', right: 10, bottom: 6, flexDirection: 'row', alignItems: 'center' },
   timeSpacer: { fontSize: 16, color: 'transparent' },
   metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 3 },
@@ -421,8 +490,10 @@ const styles = StyleSheet.create({
   checkRead: { color: READ_COLOR },
 
   stickerEmoji: { fontSize: 64, lineHeight: 72 },
-  imageBubble: { padding: 4 },
-  msgImage: { width: 220, height: 160, borderRadius: 10 },
+  imageWrap: { position: 'relative', borderRadius: 14, overflow: 'hidden' },
+  imageWrapMe: { alignSelf: 'flex-end' },
+  imageWrapOther: { alignSelf: 'flex-start' },
+  msgImage: { width: 280, height: 200, borderRadius: 0 },
 
   // Audio bubble — exact match web .m-audio
   audioBubble: { flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 200, paddingVertical: 4 },
@@ -473,4 +544,29 @@ const styles = StyleSheet.create({
   },
   reactionEmoji: { fontSize: 14 },
   reactionCount: { fontSize: 12, color: 'rgba(255,255,255,0.8)', fontWeight: '500' },
+
+  // File bubble
+  fileRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minWidth: 200 },
+  fileIconWrap: {
+    width: 46, height: 46, borderRadius: 23,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    alignItems: 'center', justifyContent: 'center',
+    flexShrink: 0,
+  },
+  fileInfo: { flex: 1, gap: 2 },
+  fileName: { fontSize: 14, fontWeight: '500', color: '#fff' },
+  fileSize: { fontSize: 12, color: 'rgba(255,255,255,0.6)' },
+
+  // Contact bubble
+  contactRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minWidth: 200 },
+  contactAvatar: {
+    width: 46, height: 46, borderRadius: 23,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center', justifyContent: 'center',
+    flexShrink: 0,
+  },
+  contactAvatarText: { fontSize: 20, fontWeight: '600', color: '#fff' },
+  contactInfo: { flex: 1, gap: 2 },
+  contactName: { fontSize: 15, fontWeight: '600', color: '#fff' },
+  contactPhone: { fontSize: 13, color: 'rgba(255,255,255,0.6)' },
 });
