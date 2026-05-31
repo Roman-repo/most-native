@@ -177,6 +177,8 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
   const pinIndexRef = useRef(0);
   const listOpacity = useRef(new Animated.Value(0)).current;
   const initialLoadRef = useRef(false);
+  const loadStartRef = useRef(0);
+  const skeletonTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Pagination
   const [pageSize, setPageSize] = useState(50);
   const [hasMore, setHasMore] = useState(true);
@@ -246,13 +248,19 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
 
   useEffect(() => {
     console.log('[Sub] listenMessages SUBSCRIBE chatId=', chatId, 'pageSize=', pageSize);
+    loadStartRef.current = Date.now();
     setMessagesLoading(true);
     const unsubMsgs = listenMessages(chatId, (msgs) => {
       setMessages(msgs);
-      setMessagesLoading(false);
+      const elapsed = Date.now() - loadStartRef.current;
+      const remaining = Math.max(0, 400 - elapsed);
+      skeletonTimerRef.current = setTimeout(() => {
+        setMessagesLoading(false);
+      }, remaining);
     }, pageSize);
     return () => {
       console.log('[Sub] listenMessages UNSUBSCRIBE chatId=', chatId, 'pageSize=', pageSize);
+      if (skeletonTimerRef.current) clearTimeout(skeletonTimerRef.current);
       unsubMsgs();
     };
   }, [chatId, pageSize]);

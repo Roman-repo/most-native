@@ -40,6 +40,8 @@ export default function UserProfileScreen({ username, chatId, onBack, onOpenGall
   const slideX = useRef(new Animated.Value(-SCREEN_W)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const closingRef = useRef(false);
+  const loadStartRef = useRef(0);
+  const skeletonTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [presence, setPresence] = useState<PresenceState | null>(null);
@@ -83,10 +85,21 @@ export default function UserProfileScreen({ username, chatId, onBack, onOpenGall
 
   // Subscriptions
   useEffect(() => {
+    loadStartRef.current = Date.now();
     setProfileLoading(true);
-    const u1 = listenMessages(chatId, (msgs) => { setMessages(msgs); setProfileLoading(false); });
+    const u1 = listenMessages(chatId, (msgs) => {
+      setMessages(msgs);
+      const elapsed = Date.now() - loadStartRef.current;
+      const remaining = Math.max(0, 400 - elapsed);
+      skeletonTimerRef.current = setTimeout(() => {
+        setProfileLoading(false);
+      }, remaining);
+    });
     const u2 = listenUserPresence(username, setPresence);
-    return () => { u1(); u2(); };
+    return () => {
+      if (skeletonTimerRef.current) clearTimeout(skeletonTimerRef.current);
+      u1(); u2();
+    };
   }, [chatId, username]);
 
   // Aggregations for tabs
