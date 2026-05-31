@@ -263,7 +263,7 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
         </View>
       )}
       onSwipeableWillOpen={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft).catch(() => {});
+        Haptics.selectionAsync().catch(() => {});
       }}
       onSwipeableLeftOpen={() => {
         onReply(m);
