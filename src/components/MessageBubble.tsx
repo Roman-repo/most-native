@@ -312,7 +312,7 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
       style={[styles.row, isMe ? styles.rowMe : styles.rowOther, m.image && styles.rowImage, deleting && { opacity: 0 }]}
       onLayout={handleLayout}
     >
-      <TouchableOpacity activeOpacity={0.85} onPress={() => onLongPress(m)}>
+      <TouchableOpacity activeOpacity={0.85} onLongPress={handleLongPressBubble}>
             {showSender && !isMe && (
               <Text style={[styles.senderName, { color: senderColor(m.sender) }]}>{m.sender}</Text>
             )}
@@ -409,14 +409,16 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
                       <Text
                         style={styles.text}
                         numberOfLines={expanded ? undefined : MAX_LINES}
-                        onTextLayout={(e) => {
-                          if (!expanded && e.nativeEvent.lines.length > MAX_LINES) {
-                            setNeedsExpand(true);
+                        onLayout={(e) => {
+                          if (!expanded && !needsExpand) {
+                            const lineCount = Math.round(e.nativeEvent.layout.height / 20.8);
+                            if (lineCount >= MAX_LINES) {
+                              setNeedsExpand(true);
+                            }
                           }
                         }}
                       >
                         {m.text}
-                        {reactionEntries.length === 0 && !needsExpand && <Text style={styles.timeSpacer}>{'\u00A0'.repeat(Math.ceil((( m.edited ? 5 : 0) + timeStr.length + (isMe ? 3 : 0)) * 1.4) + 3)}</Text>}
                       </Text>
                     ) : null}
                     {needsExpand && (
@@ -424,19 +426,21 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
                         {expanded ? 'Свернуть' : 'Читать далее'}
                       </Text>
                     )}
-                    {reactionEntries.length > 0 ? (
+                    {reactionEntries.length > 0 || needsExpand ? (
                       <View style={styles.metaRow}>
-                        <View style={styles.metaReactions}>
-                          {reactionEntries.map(([emoji, count]) => (
-                            <AnimatedReactionBadge
-                              key={emoji}
-                              emoji={emoji}
-                              count={count}
-                              onPress={() => onReactionPress(m._key, emoji)}
-                            />
-                          ))}
-                        </View>
-                        <View style={styles.metaTime}>
+                        {reactionEntries.length > 0 && (
+                          <View style={styles.metaReactions}>
+                            {reactionEntries.map(([emoji, count]) => (
+                              <AnimatedReactionBadge
+                                key={emoji}
+                                emoji={emoji}
+                                count={count}
+                                onPress={() => onReactionPress(m._key, emoji)}
+                              />
+                            ))}
+                          </View>
+                        )}
+                        <View style={[styles.metaTime, reactionEntries.length === 0 && { marginLeft: 'auto' }]}>
                           {m.edited && <Text style={styles.edited}>изм. </Text>}
                           <Text style={[styles.time, isMe ? styles.timeMe : styles.timeOther]}>{timeStr}</Text>
                           {isMe && <CheckMark read={isRead} onPress={readersPress} />}
