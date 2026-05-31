@@ -1,9 +1,13 @@
-import { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
+import { useCallback, useState, memo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Dimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Image } from 'expo-image';
-import PagerView from 'react-native-pager-view';
+import Animated, { useSharedValue, useAnimatedStyle, useAnimatedScrollHandler, interpolate, Extrapolation, type SharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+
+const AnimatedFlatList = Animated.createAnimatedComponent(Animated.FlatList<string>);
 
 type Props = {
   images: string[];
@@ -11,12 +15,81 @@ type Props = {
   onClose: () => void;
 };
 
+function GalleryItem({ item, index, scrollX, onPress }: {
+  item: string;
+  index: number;
+  scrollX: SharedValue<number>;
+  onPress: () => void;
+}) {
+  const animatedStyle = useAnimatedStyle(() => {
+    const inputRange = [
+      (index - 1) * SCREEN_W,
+      index * SCREEN_W,
+      (index + 1) * SCREEN_W,
+    ];
+
+    const scale = interpolate(
+      scrollX.value,
+      inputRange,
+      [0.88, 1, 0.88],
+      Extrapolation.CLAMP,
+    );
+
+    const opacity = interpolate(
+      scrollX.value,
+      inputRange,
+      [0.5, 1, 0.5],
+      Extrapolation.CLAMP,
+    );
+
+    return {
+      transform: [{ scale }],
+      opacity,
+    };
+  });
+
+  return (
+    <View style={{ width: SCREEN_W, height: SCREEN_H }}>
+      <TouchableOpacity activeOpacity={1} onPress={onPress} style={StyleSheet.absoluteFillObject}>
+        <Animated.View style={[{ width: SCREEN_W, height: SCREEN_H }, animatedStyle]}>
+          <Image
+            source={{ uri: item }}
+            style={StyleSheet.absoluteFillObject}
+            contentFit="contain"
+            cachePolicy="memory-disk"
+            allowDownscaling
+            recyclingKey={item}
+          />
+        </Animated.View>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const MemoGalleryItem = memo(GalleryItem);
+
 export default function GalleryScreen({ images, initialIndex, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const [index, setIndex] = useState(initialIndex);
   const [headerVisible, setHeaderVisible] = useState(true);
+  const scrollX = useSharedValue(initialIndex * SCREEN_W);
+
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollX.value = event.contentOffset.x;
+    },
+  });
 
   const toggleHeader = useCallback(() => setHeaderVisible((v) => !v), []);
+
+  const renderItem = useCallback(({ item, index: i }: { item: string; index: number }) => (
+    <MemoGalleryItem item={item} index={i} scrollX={scrollX} onPress={toggleHeader} />
+  ), [toggleHeader, scrollX]);
+
+  const onMomentumScrollEnd = useCallback((e: any) => {
+    const newIndex = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
+    setIndex(newIndex);
+  }, []);
 
   return (
     <Modal
@@ -28,27 +101,26 @@ export default function GalleryScreen({ images, initialIndex, onClose }: Props) 
     >
       <StatusBar style="light" />
       <View style={styles.root}>
-        <PagerView
-          style={styles.pager}
-          initialPage={initialIndex}
-          onPageSelected={(e) => setIndex(e.nativeEvent.position)}
-          scrollEnabled
-        >
-          {images.map((img, i) => (
-            <View key={i} style={styles.page}>
-              <TouchableOpacity activeOpacity={1} onPress={toggleHeader} style={StyleSheet.absoluteFillObject}>
-                <Image
-                  source={{ uri: img }}
-                  style={StyleSheet.absoluteFillObject}
-                  contentFit="contain"
-                  cachePolicy="memory-disk"
-                  allowDownscaling
-                  recyclingKey={img}
-                />
-              </TouchableOpacity>
-            </View>
-          ))}
-        </PagerView>
+        <AnimatedFlatList
+          data={images}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          initialScrollIndex={initialIndex}
+          getItemLayout={(data, index) => ({
+            length: SCREEN_W,
+            offset: SCREEN_W * index,
+            index,
+          })}
+          keyExtractor={(item, index) => index.toString()}
+          renderItem={renderItem}
+          onScroll={scrollHandler}
+          onMomentumScrollEnd={onMomentumScrollEnd}
+          scrollEventThrottle={16}
+          windowSize={3}
+          initialNumToRender={3}
+          maxToRenderPerBatch={3}
+        />
 
         {headerVisible && (
           <View style={[styles.header, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
@@ -67,8 +139,6 @@ export default function GalleryScreen({ images, initialIndex, onClose }: Props) 
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)' },
-  pager: { flex: 1 },
-  page: { flex: 1 },
   header: {
     position: 'absolute',
     top: 0, left: 0, right: 0,
