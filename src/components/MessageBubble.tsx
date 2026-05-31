@@ -252,14 +252,23 @@ const MessageBubble = memo(function MessageBubble({ message: m, isMe, isRead, sh
     onLongPress(m);
   }, [m, onLongPress]);
 
+  const swipeableRef = useRef<Swipeable>(null);
+
   return (
     <Swipeable
+      ref={swipeableRef}
       renderLeftActions={() => (
         <View style={styles.replyAction}>
           <IconReply size={22} color={theme.accent} />
         </View>
       )}
-      onSwipeableLeftOpen={() => onReply(m)}
+      onSwipeableWillOpen={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      }}
+      onSwipeableLeftOpen={() => {
+        onReply(m);
+        swipeableRef.current?.close();
+      }}
       leftThreshold={60}
       rightThreshold={9999}
       friction={1.5}
