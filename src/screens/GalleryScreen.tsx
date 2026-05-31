@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Image } from 'expo-image';
@@ -37,6 +37,15 @@ export default function GalleryScreen({ images, initialIndex, onClose }: Props) 
 
   const handleIndexChange = useCallback((i: number) => setIndex(i), []);
   const toggleHeader = useCallback(() => setHeaderVisible((v) => !v), []);
+
+  // Prefetch adjacent images so swipe is instant (no decode jank)
+  useEffect(() => {
+    const targets: string[] = [];
+    if (images[index - 1]) targets.push(images[index - 1]);
+    targets.push(images[index]);
+    if (images[index + 1]) targets.push(images[index + 1]);
+    targets.forEach((uri) => Image.prefetch(uri));
+  }, [images, index]);
 
   return (
     <Modal
