@@ -40,11 +40,12 @@ This signals: **EAS Build required**, OTA update is not enough.
    - Each feature gets its own branch: `feat/{VERSION}-{short-desc}`.
    - Branch numbering follows release order (e.g., `feat/4.17.0-...`, `feat/4.17.1-...`, `feat/4.18.0-...`).
    - Create branch with `git checkout -b feat/X.Y.Z-description` before committing.
-7. **When user says "закрывай фичу" (close the feature):**
-   - Ensure you are on the feature branch.
+7. **When user says "закрывай фичу" or "закрывай фикс" (close the feature / fix):**
+   - Ensure you are on the feature/fix branch.
    - Run `git add -A && git commit -m "feat: ..."` (or `fix:` / `refactor:` depending on the work).
    - Update `CHANGELOG.md` with a new entry describing what was done.
    - Commit message and CHANGELOG entry must reference any related REQ numbers.
+   - **Merge the branch into `main`** (or `dev` if it exists) and **push both the branch and the target branch**.
 
 ### Rollback Policy
 
