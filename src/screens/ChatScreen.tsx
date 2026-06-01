@@ -386,7 +386,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
 
     const pos = msgPositionsRef.current.get(targetKey);
     if (pos && scrollViewRef.current) {
-      scrollViewRef.current.scrollTo({ y: Math.max(0, pos.y - headerH - pinH - 20), animated: true });
+      scrollViewRef.current.scrollTo({ y: Math.max(0, pos.y), animated: true });
     }
   }, [pins, pinIndex, headerH, pinH]);
 
@@ -933,7 +933,13 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
         lastDate = dateLabel;
       }
       elems.push(
-        <View key={item._key}>
+        <View
+          key={item._key}
+          onLayout={(e) => {
+            const { y, height } = e.nativeEvent.layout;
+            msgPositionsRef.current.set(item._key, { y, height });
+          }}
+        >
           <MessageBubble
             message={item}
             isMe={item.sender === user}
@@ -946,7 +952,6 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
             bubbleColor={chatTheme?.acc}
             peer={!isGroup && !isGeneralChat ? chatName : undefined}
             registerBubbleRef={registerBubbleRef}
-            onLayoutBubble={(key, y, height) => msgPositionsRef.current.set(key, { y, height })}
             isGroup={isGroup}
             onShowReaders={handleShowReaders}
           />
