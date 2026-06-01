@@ -889,7 +889,7 @@ export default function ChatScreen({ chatId, chatName, user, isGroup, onBack, on
   useEffect(() => {
     datePositionsRef.current.clear();
     msgPositionsRef.current.clear();
-  }, [messages]);
+  }, [chatId]);
 
   const handleChangeText = useCallback((t: string) => {
     setText(t);
